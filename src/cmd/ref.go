@@ -6,6 +6,7 @@ import (
   "fmt"
   "flag"
   "strings"
+  "strconv"
   "reflect"
   "go/ast"
   "go/token"
@@ -197,7 +198,11 @@ func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructTyp
   if s.Fields != nil {
     for i, e := range s.Fields.List {
       if e.Tag != nil  && e.Tag.Kind == token.STRING {
-        t := reflect.StructTag(e.Tag.Value)
+        tag, err := strconv.Unquote(e.Tag.Value)
+        if err != nil {
+          return false, err
+        }
+        t := reflect.StructTag(tag)
         if ref := t.Get(refTag); ref != "" {
           id, n, err := ident(e.Type, 0)
           if err != nil {
@@ -294,13 +299,14 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
       
       var jtag, rtag string
       if e.Tag != nil  && e.Tag.Kind == token.STRING {
-        t := reflect.StructTag(e.Tag.Value)
+        tag, err := strconv.Unquote(e.Tag.Value)
+        if err != nil {
+          return err
+        }
+        t := reflect.StructTag(tag)
         jtag = t.Get(jsonTag)
         rtag = t.Get(refTag)
       }
-      
-      fmt.Println("TAGS: ref", rtag)
-      fmt.Println("TAGS: json", jtag)
       
       if jtag == "-" {
         continue // explicitly ignored
@@ -322,7 +328,18 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
         }else{
           f = id.Name
         }
-        marshal += fmt.Sprintf(`  s +=   fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
+        if rtag != "" {
+          marshal += fmt.Sprintf(`  if v.%v != nil {
+    if v.%v.HasValue() {
+      s += fmt.Sprintf("%%s:", json.Marshal(%q))
+      s += json.Marshal(v.%v.Value)
+    }else{
+      s += fmt.Sprintf("%%s:", json.Marshal(%q))
+    }
+  }`, id.Name, id.Name, f, id.Name, rtag) +"\n"
+        }else{
+          marshal += fmt.Sprintf(`  s += fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
+        }
       }
       
     }
