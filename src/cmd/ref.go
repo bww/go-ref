@@ -102,7 +102,6 @@ func main() {
   }
   
   cmdline     := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fPackage    := cmdline.String   ("package",   "main",     "The output package for generated sources.")
   fDebug      := cmdline.Bool     ("debug",     false,      "Enable debugging mode.")
   fVerbose    := cmdline.Bool     ("verbose",   false,      "Be more verbose.")
   cmdline.Parse(os.Args[1:])
@@ -111,8 +110,6 @@ func main() {
   VERBOSE = *fVerbose
   
   opts := optionNone
-  fset := token.NewFileSet()
-  cxt := newContext(*fPackage, opts)
   for _, f := range cmdline.Args() {
     
     info, err := os.Stat(f)
@@ -121,25 +118,63 @@ func main() {
       return
     }
     
-    if info.IsDir() {
-      err := procDir(cxt, fset, f)
-      if err != nil {
-        fmt.Printf("%v: %v\n", CMD, err)
-        return
-      }
-    }else{
-      err := procFile(cxt, fset, *fPackage, f)
-      if err != nil {
-        fmt.Printf("%v: %v\n", CMD, err)
-        return
-      }
+    if !info.IsDir() {
+      fmt.Printf("%v: not a package; skipping: %v\n", CMD, f)
+      continue
+    }
+    
+    err = procDir(f, opts)
+    if err != nil {
+      fmt.Printf("%v: %v\n", CMD, err)
+      return
     }
     
   }
   
-  w := os.Stdout
-  fmt.Fprintf(w, `package %v
+}
+
+func procDir(dir string, opts options) error {
+  fset := token.NewFileSet()
   
+  excludeGenerated := func(info os.FileInfo) bool {
+    return !strings.HasSuffix(info.Name(), "_ref.go")
+  }
+  
+  pkgs, err := parser.ParseDir(fset, dir, excludeGenerated, 0)
+  if err != nil {
+    return err
+  }
+  
+  for pname, pkg := range pkgs {
+    err := procPackage(newContext(pname, opts), fset, dir, pkg)
+    if err != nil {
+      return err
+    }
+  }
+  
+  return nil
+}
+
+func procPackage(cxt *context, fset *token.FileSet, dir string, pkg *ast.Package) error {
+  
+  for fname, file := range pkg.Files {
+    out, err := refOut(fname)
+    if err != nil {
+      return err
+    }
+    err = procAST(cxt, out, fset, pkg.Name, fname, file)
+    if err != nil {
+      return err
+    }
+  }
+  
+  out, err := refWriter(path.Join(dir, "pkg_ref.go"))
+  if err != nil {
+    return err
+  }
+  
+  fmt.Fprintf(out, `package %v
+
 import (
   "fmt"
   "encoding/json"
@@ -147,92 +182,29 @@ import (
 `, cxt.Package)
   
   for _, v := range cxt.Generate {
-    err := genType(cxt, w, fset, v)
+    err := genType(cxt, out, fset, v)
     if err != nil {
-      fmt.Printf("%v: could not generate: %v\n", CMD, err)
-      return
+      return err
     }
   }
   
   for _, v := range cxt.Marshal {
-    err := genMarshal(cxt, w, fset, v)
-    if err != nil {
-      fmt.Printf("%v: could not generate: %v\n", CMD, err)
-      return
-    }
-  }
-  
-}
-
-func procDir(cxt *context, fset *token.FileSet, dir string) error {
-  
-  /*
-  dir, err := os.Open(root)
-  if err != nil {
-    return err
-  }
-  
-  infos, err := dir.Readdir(0)
-  if err != nil {
-    return err
-  }
-  
-  for _, info := range infos {
-    err := procFile(cxt, fset, pkg, path.Join(root, info.Name()))
-    if err != nil {
-      return err
-    }
-  }
-  */
-  
-  pkgs, err := parser.ParseDir(fset, dir, nil, 0)
-  if err != nil {
-    return err
-  }
-  
-  for name, pkg := range pkgs {
-    procSrc(cxt, 
-  }
-  
-  return nil
-}
-
-func procFile(cxt *context, fset *token.FileSet, pkg, src string) error {
-  var err error
-  
-  var out io.Writer
-  if DEBUG {
-    out = os.Stdout
-  }else{
-    base := path.Base(src)
-    ext  := path.Ext(src)
-    name := path.Join(path.Dir(src), base[:len(base) - len(ext)] +"_ref"+ ext)
-    out, err = os.OpenFile(name, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0644)
+    err := genMarshal(cxt, out, fset, v)
     if err != nil {
       return err
     }
   }
   
-  err = procSrc(cxt, out, fset, src)
-  if err != nil {
-    return err
-  }
-  
   return nil
 }
 
-func procSrc(cxt *context, w io.Writer, fset *token.FileSet, src string) error {
+func procAST(cxt *context, w io.Writer, fset *token.FileSet, pkg, src string, file *ast.File) error {
   nerr := 0
   
-  f, err := parser.ParseFile(fset, src, nil, 0)
-  if err != nil {
-    return err
-  }
-  
-  ast.Inspect(f, func(n ast.Node) bool {
+  ast.Inspect(file, func(n ast.Node) bool {
     switch t := n.(type) {
       case *ast.GenDecl:
-        err = typeSpecs(cxt, w, fset, t.Specs)
+        err := typeSpecs(cxt, w, fset, t.Specs)
         if err != nil {
           fmt.Printf("%v: %v: %v\n", CMD, src, err)
           nerr++
@@ -242,7 +214,7 @@ func procSrc(cxt *context, w io.Writer, fset *token.FileSet, src string) error {
   })
   
   if nerr < 1 {
-    printer.Fprint(w, fset, f)
+    printer.Fprint(w, fset, file)
   }
   return nil
 }
@@ -443,6 +415,22 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
   
   fmt.Fprint(w, "\n"+ marshal +"\n")
   return nil
+}
+
+func refOut(f string) (io.Writer, error) {
+  return refWriter(refFile(f))
+}
+
+func refWriter(f string) (io.Writer, error) {
+  if DEBUG {
+    return os.Stdout, nil
+  }else{
+    w, err := os.OpenFile(f, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0644)
+    if err != nil {
+      return nil, err
+    }
+    return w, nil
+  }
 }
 
 func refFile(src string) string {
