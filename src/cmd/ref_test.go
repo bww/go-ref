@@ -13,8 +13,8 @@ type Hello struct {
 }
 
 type Example struct {
-  A   *Int      `json:"a" ref:"a_id"`
-  B   *Complex  `json:"b" ref:"b_id"`
+  A   *Int      `json:"a" ref:"a_id,value"`
+  B   *Complex  `json:"b" ref:"b_id,id"`
 }
 
 type Another struct {

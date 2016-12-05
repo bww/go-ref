@@ -329,14 +329,16 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
           f = id.Name
         }
         if rtag != "" {
+          // fname, vtype := parseTag(rtag)
           marshal += fmt.Sprintf(`  if v.%v != nil {
     if v.%v.HasValue() {
       s += fmt.Sprintf("%%s:", json.Marshal(%q))
       s += json.Marshal(v.%v.Value)
-    }else{
+    }else if v.%v.Id != "" {
       s += fmt.Sprintf("%%s:", json.Marshal(%q))
+      s += json.Marshal(v.%v.Id)
     }
-  }`, id.Name, id.Name, f, id.Name, rtag) +"\n"
+  }`, id.Name, id.Name, f, id.Name, id.Name, rtag, id.Name) +"\n"
         }else{
           marshal += fmt.Sprintf(`  s += fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
         }
@@ -351,4 +353,12 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
   
   fmt.Fprint(w, "\n"+ marshal +"\n")
   return nil
+}
+
+func parseTag(t string) (string, string) {
+  if x := strings.Index(t, ","); x > 0 {
+    return t[:x], t[x+1:]
+  }else{
+    return t, ""
+  }
 }
