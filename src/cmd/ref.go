@@ -260,7 +260,8 @@ func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructTyp
         }
         t := reflect.StructTag(tag)
         if ref := t.Get(refTag); ref != "" {
-          id, n, err := ident(e.Type, 0)
+          // NOTE INDIRECTS HERE FOR UNDERLYING VALUE IN GENERATED TYPE?
+          id, _, err := ident(e.Type, 0)
           if err != nil {
             return false, err
           }
@@ -269,7 +270,7 @@ func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructTyp
           }
           s.Fields.List[i] = &ast.Field{
             Names:e.Names,
-            Type:indirect(ast.NewIdent(id.Name + refSuffix), n),
+            Type:indirect(ast.NewIdent(id.Name + refSuffix), 1),
             Comment:e.Comment,
             Tag:e.Tag,
           }
@@ -343,11 +344,10 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
     return fmt.Errorf("Base type must be a struct: %v", id.Name)
   }
   
-  marshal := fmt.Sprintf(`func (v %v) MarshalJSON() ([]byte, error) {
-  s := "{"
-`,
-  id.Name)
+  decl := fmt.Sprintf(`func (v %v) MarshalJSON() ([]byte, error) {`, id.Name)
+  var defX, defErr int
   
+  marshal := `  s := "{"`+"\n"
   if base.Fields != nil {
     for _, e := range base.Fields.List {
       
@@ -385,24 +385,44 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
         if rtag != "" {
           r, which := parseTag(rtag)
           if which == "" || which == marshalValue {
+            defX++; defErr++
             marshal += fmt.Sprintf(`  if v.%v != nil {
     if v.%v.HasValue() {
-      s += fmt.Sprintf("%%s:", json.Marshal(%q))
-      s += string(json.Marshal(v.%v.Value))
+      x, err = json.Marshal(%q)
+      if err != nil {
+        return nil, err
+      }
+      s += fmt.Sprintf("%%s:", x)
+      x, err = json.Marshal(v.%v.Value)
+      if err != nil {
+        return nil, err
+      }
+      s += string(x)
     }
   }`, id.Name, id.Name, f, id.Name) +"\n"
           }else if which == marshalId {
+            defX++; defErr++
             marshal += fmt.Sprintf(`  if v.%v != nil {
     if v.%v.Id != "" {
-      s += fmt.Sprintf("%%s:", json.Marshal(%q))
-      s += string(json.Marshal(v.%v.Id))
+      x, err = json.Marshal(%q)
+      if err != nil {
+        return nil, err
+      }
+      s += fmt.Sprintf("%%s:", x)
+      x, err = json.Marshal(v.%v.Id)
+      if err != nil {
+        return nil, err
+      }
+      s += string(x)
     }
   }`, id.Name, id.Name, r, id.Name) +"\n"
           }else{
             return fmt.Errorf("Invalid marshaling option: %v", which)
           }
         }else{
-          marshal += fmt.Sprintf(`  s += fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
+          defX++; defErr++
+          marshal += fmt.Sprintf(`  x, err = json.Marshal(%q)
+  s += fmt.Sprintf("%%s:", string(x))`, f) +"\n"
         }
       }
       
@@ -413,7 +433,15 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
   marshal += `  return []byte(s), nil` + "\n"
   marshal += `}`
   
-  fmt.Fprint(w, "\n"+ marshal +"\n")
+  fmt.Fprint(w, "\n"+ decl +"\n")
+  if defX > 0 {
+    fmt.Fprint(w, "  var x []byte\n")
+  }
+  if defErr > 0 {
+    fmt.Fprint(w, "  var err error\n")
+  }
+  fmt.Fprint(w, marshal +"\n")
+  
   return nil
 }
 
