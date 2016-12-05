@@ -54,21 +54,33 @@ const (
   refTag    = "ref"
   refSuffix = "Ref"
   idType    = "string"
+  jsonTag   = "json"
+)
+
+/**
+ * Options
+ */
+type options uint32
+const (
+  optionNone        = options(0)
+  optionPreferIdent = options(1 << 0)
 )
 
 /**
  * Context
  */
 type context struct {
+  Options   options
   Types     typeSet
   Generate  identSet
+  Marshal   identSet
 }
 
 /**
  * Create a new context
  */
-func newContext() *context {
-  return &context{make(typeSet), make(identSet)}
+func newContext(opts options) *context {
+  return &context{opts, make(typeSet), make(identSet), make(identSet)}
 }
 
 /**
@@ -83,14 +95,20 @@ func main() {
   }
   
   cmdline     := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fDebug      := cmdline.Bool     ("debug",       false,      "Enable debugging mode.")
-  fVerbose    := cmdline.Bool     ("verbose",     false,      "Be more verbose.")
+  fPreferId   := cmdline.Bool     ("use-id",    false,      "Marshal the identifier instead of the value when both are present.")
+  fDebug      := cmdline.Bool     ("debug",     false,      "Enable debugging mode.")
+  fVerbose    := cmdline.Bool     ("verbose",   false,      "Be more verbose.")
   cmdline.Parse(os.Args[1:])
   
   DEBUG   = *fDebug
   VERBOSE = *fVerbose
   
-  cxt := newContext()
+  opts := optionNone
+  if *fPreferId {
+    opts |= optionPreferIdent
+  }
+  
+  cxt := newContext(opts)
   for _, f := range cmdline.Args() {
     err := proc(cxt, os.Stdout, f)
     if err != nil {
@@ -101,6 +119,14 @@ func main() {
   
   for _, v := range cxt.Generate {
     err := genType(cxt, os.Stdout, v)
+    if err != nil {
+      fmt.Printf("%v: could not generate: %v\n", CMD, err)
+      return
+    }
+  }
+  
+  for _, v := range cxt.Marshal {
+    err := genMarshal(cxt, os.Stdout, v)
     if err != nil {
       fmt.Printf("%v: could not generate: %v\n", CMD, err)
       return
@@ -141,27 +167,33 @@ func typeSpecs(cxt *context, w io.Writer, fset *token.FileSet, s []ast.Spec) err
     switch v := e.(type) {
       case *ast.TypeSpec:
         cxt.Types.Add(v)
-        err := typeExpr(cxt, w, fset, v.Type)
+        gen, err := typeExpr(cxt, w, fset, v.Type)
         if err != nil {
           return err
+        }
+        if gen {
+          cxt.Marshal.Add(v.Name)
         }
     }
   }
   return nil
 }
 
-func typeExpr(cxt *context, w io.Writer, fset *token.FileSet, e ast.Expr) error {
+func typeExpr(cxt *context, w io.Writer, fset *token.FileSet, e ast.Expr) (bool, error) {
+  var err error
+  var gen bool
   switch v := e.(type) {
     case *ast.StructType:
-      err := structType(cxt, w, fset, v)
+      gen, err = structType(cxt, w, fset, v)
       if err != nil {
-        return err
+        return false, err
       }
   }
-  return nil
+  return gen, nil
 }
 
-func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructType) error {
+func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructType) (bool, error) {
+  var gen bool
   if s.Fields != nil {
     for i, e := range s.Fields.List {
       if e.Tag != nil  && e.Tag.Kind == token.STRING {
@@ -169,18 +201,24 @@ func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructTyp
         if ref := t.Get(refTag); ref != "" {
           id, n, err := ident(e.Type, 0)
           if err != nil {
-            return err
+            return false, err
           }
           if !id.IsExported() {
-            return fmt.Errorf("Field must be exported: %v", id.Name)
+            return false, fmt.Errorf("Field must be exported: %v", id.Name)
           }
-          s.Fields.List[i] = &ast.Field{Names:e.Names, Type:indirect(ast.NewIdent(id.Name + refSuffix), n)}
+          s.Fields.List[i] = &ast.Field{
+            Names:e.Names,
+            Type:indirect(ast.NewIdent(id.Name + refSuffix), n),
+            Comment:e.Comment,
+            Tag:e.Tag,
+          }
           cxt.Generate.Add(id)
+          gen = true
         }
       }
     }
   }
-  return nil
+  return gen, nil
 }
 
 func ident(e ast.Expr, r int) (*ast.Ident, int, error) {
@@ -204,16 +242,96 @@ func indirect(e *ast.Ident, r int) ast.Expr {
 
 func genType(cxt *context, w io.Writer, id *ast.Ident) error {
   
-  _, ok := cxt.Types[id.Name]
-  if !ok {
-    return fmt.Errorf("No base type found for: %v", id.Name)
-  }
-  
+  refId := id.Name + refSuffix
   tspec := fmt.Sprintf(`type %v struct {
   Id    %v
   Value *%v
-}`, id.Name + refSuffix, idType, id.Name)
+}
+
+func New%v(v *%v) *%v {
+  return &%v{Value:v}
+}
+
+func New%vId(v %v) *%v {
+  return &%v{Id:v}
+}
+
+func (v %v) HasValue() bool {
+  return v.Value != nil
+}`,
+  refId, idType, id.Name,
+  refId, id.Name, refId,
+  refId,
+  refId, idType, refId,
+  refId,
+  refId)
   
-  fmt.Fprint(w, tspec +"\n\n")
+  fmt.Fprint(w, "\n"+ tspec +"\n")
+  return nil
+}
+
+func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
+  
+  spec, ok := cxt.Types[id.Name]
+  if !ok {
+    return fmt.Errorf("No type found for: %v", id.Name)
+  }
+  
+  base, ok := spec.Type.(*ast.StructType)
+  if !ok {
+    return fmt.Errorf("Base type must be a struct: %v", id.Name)
+  }
+  
+  marshal := fmt.Sprintf(`func (v %v) MarshalJSON() ([]byte, error) {
+  preferValue := %v // this is a generation-time option
+  s := "{"
+`,
+  id.Name,
+  (cxt.Options & optionPreferIdent) != optionPreferIdent)
+  
+  if base.Fields != nil {
+    for _, e := range base.Fields.List {
+      
+      var jtag, rtag string
+      if e.Tag != nil  && e.Tag.Kind == token.STRING {
+        t := reflect.StructTag(e.Tag.Value)
+        jtag = t.Get(jsonTag)
+        rtag = t.Get(refTag)
+      }
+      
+      fmt.Println("TAGS: ref", rtag)
+      fmt.Println("TAGS: json", jtag)
+      
+      if jtag == "-" {
+        continue // explicitly ignored
+      }else if jtag != "" && len(e.Names) > 1 {
+        return fmt.Errorf("Field list has %d identifiers for one tag", len(e.Names))
+      }
+      
+      for _, v := range e.Names {
+        id, _, err := ident(v, 0)
+        if err != nil {
+          return err
+        }
+        if !id.IsExported() {
+          continue // ignore unexported fields
+        }
+        var f string
+        if jtag != "" {
+          f = jtag
+        }else{
+          f = id.Name
+        }
+        marshal += fmt.Sprintf(`  s +=   fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
+      }
+      
+    }
+  }
+  
+  marshal += `  s += "}"` + "\n"
+  marshal += `  return []byte(s), nil` + "\n"
+  marshal += `}`
+  
+  fmt.Fprint(w, "\n"+ marshal +"\n")
   return nil
 }
