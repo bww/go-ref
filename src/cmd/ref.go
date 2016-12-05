@@ -5,6 +5,7 @@ import (
   "io"
   "fmt"
   "flag"
+  "path"
   "strings"
   "strconv"
   "reflect"
@@ -52,10 +53,14 @@ func (s identSet) Add(v *ast.Ident) {
  * Reference type suffix
  */
 const (
-  refTag    = "ref"
-  refSuffix = "Ref"
-  idType    = "string"
-  jsonTag   = "json"
+  refTag        = "ref"
+  refSuffix     = "Ref"
+  
+  idType        = "string"
+  jsonTag       = "json"
+  
+  marshalId     = "id"
+  marshalValue  = "value"
 )
 
 /**
@@ -71,6 +76,7 @@ const (
  * Context
  */
 type context struct {
+  Package   string
   Options   options
   Types     typeSet
   Generate  identSet
@@ -80,8 +86,8 @@ type context struct {
 /**
  * Create a new context
  */
-func newContext(opts options) *context {
-  return &context{opts, make(typeSet), make(identSet), make(identSet)}
+func newContext(pkg string, opts options) *context {
+  return &context{pkg, opts, make(typeSet), make(identSet), make(identSet)}
 }
 
 /**
@@ -96,7 +102,7 @@ func main() {
   }
   
   cmdline     := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fPreferId   := cmdline.Bool     ("use-id",    false,      "Marshal the identifier instead of the value when both are present.")
+  fPackage    := cmdline.String   ("package",   "main",     "The output package for generated sources.")
   fDebug      := cmdline.Bool     ("debug",     false,      "Enable debugging mode.")
   fVerbose    := cmdline.Bool     ("verbose",   false,      "Be more verbose.")
   cmdline.Parse(os.Args[1:])
@@ -105,21 +111,43 @@ func main() {
   VERBOSE = *fVerbose
   
   opts := optionNone
-  if *fPreferId {
-    opts |= optionPreferIdent
-  }
-  
-  cxt := newContext(opts)
+  fset := token.NewFileSet()
+  cxt := newContext(*fPackage, opts)
   for _, f := range cmdline.Args() {
-    err := proc(cxt, os.Stdout, f)
+    
+    info, err := os.Stat(f)
     if err != nil {
-      fmt.Printf("%v: could not process: %v\n", CMD, err)
+      fmt.Printf("%v: %v\n", CMD, err)
       return
     }
+    
+    if info.IsDir() {
+      err := procDir(cxt, fset, f)
+      if err != nil {
+        fmt.Printf("%v: %v\n", CMD, err)
+        return
+      }
+    }else{
+      err := procFile(cxt, fset, *fPackage, f)
+      if err != nil {
+        fmt.Printf("%v: %v\n", CMD, err)
+        return
+      }
+    }
+    
   }
   
+  w := os.Stdout
+  fmt.Fprintf(w, `package %v
+  
+import (
+  "fmt"
+  "encoding/json"
+)
+`, cxt.Package)
+  
   for _, v := range cxt.Generate {
-    err := genType(cxt, os.Stdout, v)
+    err := genType(cxt, w, fset, v)
     if err != nil {
       fmt.Printf("%v: could not generate: %v\n", CMD, err)
       return
@@ -127,7 +155,7 @@ func main() {
   }
   
   for _, v := range cxt.Marshal {
-    err := genMarshal(cxt, os.Stdout, v)
+    err := genMarshal(cxt, w, fset, v)
     if err != nil {
       fmt.Printf("%v: could not generate: %v\n", CMD, err)
       return
@@ -136,11 +164,67 @@ func main() {
   
 }
 
-func proc(cxt *context, w io.Writer, p string) error {
-  fset := token.NewFileSet()
+func procDir(cxt *context, fset *token.FileSet, dir string) error {
+  
+  /*
+  dir, err := os.Open(root)
+  if err != nil {
+    return err
+  }
+  
+  infos, err := dir.Readdir(0)
+  if err != nil {
+    return err
+  }
+  
+  for _, info := range infos {
+    err := procFile(cxt, fset, pkg, path.Join(root, info.Name()))
+    if err != nil {
+      return err
+    }
+  }
+  */
+  
+  pkgs, err := parser.ParseDir(fset, dir, nil, 0)
+  if err != nil {
+    return err
+  }
+  
+  for name, pkg := range pkgs {
+    procSrc(cxt, 
+  }
+  
+  return nil
+}
+
+func procFile(cxt *context, fset *token.FileSet, pkg, src string) error {
+  var err error
+  
+  var out io.Writer
+  if DEBUG {
+    out = os.Stdout
+  }else{
+    base := path.Base(src)
+    ext  := path.Ext(src)
+    name := path.Join(path.Dir(src), base[:len(base) - len(ext)] +"_ref"+ ext)
+    out, err = os.OpenFile(name, os.O_WRONLY | os.O_CREATE | os.O_TRUNC, 0644)
+    if err != nil {
+      return err
+    }
+  }
+  
+  err = procSrc(cxt, out, fset, src)
+  if err != nil {
+    return err
+  }
+  
+  return nil
+}
+
+func procSrc(cxt *context, w io.Writer, fset *token.FileSet, src string) error {
   nerr := 0
   
-  f, err := parser.ParseFile(fset, p, nil, 0)
+  f, err := parser.ParseFile(fset, src, nil, 0)
   if err != nil {
     return err
   }
@@ -150,7 +234,7 @@ func proc(cxt *context, w io.Writer, p string) error {
       case *ast.GenDecl:
         err = typeSpecs(cxt, w, fset, t.Specs)
         if err != nil {
-          fmt.Printf("%v: %v: %v\n", CMD, p, err)
+          fmt.Printf("%v: %v: %v\n", CMD, src, err)
           nerr++
         }
     }
@@ -245,7 +329,7 @@ func indirect(e *ast.Ident, r int) ast.Expr {
   return v
 }
 
-func genType(cxt *context, w io.Writer, id *ast.Ident) error {
+func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) error {
   
   refId := id.Name + refSuffix
   tspec := fmt.Sprintf(`type %v struct {
@@ -275,7 +359,7 @@ func (v %v) HasValue() bool {
   return nil
 }
 
-func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
+func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) error {
   
   spec, ok := cxt.Types[id.Name]
   if !ok {
@@ -288,11 +372,9 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
   }
   
   marshal := fmt.Sprintf(`func (v %v) MarshalJSON() ([]byte, error) {
-  preferValue := %v // this is a generation-time option
   s := "{"
 `,
-  id.Name,
-  (cxt.Options & optionPreferIdent) != optionPreferIdent)
+  id.Name)
   
   if base.Fields != nil {
     for _, e := range base.Fields.List {
@@ -324,21 +406,29 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
         }
         var f string
         if jtag != "" {
-          f = jtag
+          f, _ = parseTag(jtag)
         }else{
           f = id.Name
         }
         if rtag != "" {
-          // fname, vtype := parseTag(rtag)
-          marshal += fmt.Sprintf(`  if v.%v != nil {
+          r, which := parseTag(rtag)
+          if which == "" || which == marshalValue {
+            marshal += fmt.Sprintf(`  if v.%v != nil {
     if v.%v.HasValue() {
       s += fmt.Sprintf("%%s:", json.Marshal(%q))
-      s += json.Marshal(v.%v.Value)
-    }else if v.%v.Id != "" {
-      s += fmt.Sprintf("%%s:", json.Marshal(%q))
-      s += json.Marshal(v.%v.Id)
+      s += string(json.Marshal(v.%v.Value))
     }
-  }`, id.Name, id.Name, f, id.Name, id.Name, rtag, id.Name) +"\n"
+  }`, id.Name, id.Name, f, id.Name) +"\n"
+          }else if which == marshalId {
+            marshal += fmt.Sprintf(`  if v.%v != nil {
+    if v.%v.Id != "" {
+      s += fmt.Sprintf("%%s:", json.Marshal(%q))
+      s += string(json.Marshal(v.%v.Id))
+    }
+  }`, id.Name, id.Name, r, id.Name) +"\n"
+          }else{
+            return fmt.Errorf("Invalid marshaling option: %v", which)
+          }
         }else{
           marshal += fmt.Sprintf(`  s += fmt.Sprintf("%%s:", json.Marshal(%q))`, f) +"\n"
         }
@@ -353,6 +443,12 @@ func genMarshal(cxt *context, w io.Writer, id *ast.Ident) error {
   
   fmt.Fprint(w, "\n"+ marshal +"\n")
   return nil
+}
+
+func refFile(src string) string {
+  base := path.Base(src)
+  ext  := path.Ext(src)
+  return path.Join(path.Dir(src), base[:len(base) - len(ext)] +"_ref"+ ext)
 }
 
 func parseTag(t string) (string, string) {
