@@ -53,12 +53,8 @@ func (s identSet) Add(v *ast.Ident) {
  * Reference type suffix
  */
 const (
-  refTag        = "ref"
   refSuffix     = "Ref"
-  
   idType        = "string"
-  jsonTag       = "json"
-  
   marshalId     = "id"
   marshalValue  = "value"
 )
@@ -546,14 +542,6 @@ func refFile(src string) string {
   base := path.Base(src)
   ext  := path.Ext(src)
   return path.Join(path.Dir(src), base[:len(base) - len(ext)] +"_ref"+ ext)
-}
-
-func parseTag(t string) (string, string) {
-  if x := strings.Index(t, ","); x > 0 {
-    return t[:x], t[x+1:]
-  }else{
-    return t, ""
-  }
 }
 
 func indent(t int, s string) string {
