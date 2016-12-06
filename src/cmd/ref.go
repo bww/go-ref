@@ -177,6 +177,7 @@ func procPackage(cxt *context, fset *token.FileSet, dir string, pkg *ast.Package
 
 import (
   "fmt"
+  "reflect"
   "encoding/json"
 )
 `, cxt.Package)
@@ -194,6 +195,27 @@ import (
       return err
     }
   }
+  
+  routines := `
+func isEmptyValue(v reflect.Value) bool {
+  switch v.Kind() {
+  case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+    return v.Len() == 0
+  case reflect.Bool:
+    return !v.Bool()
+  case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+    return v.Int() == 0
+  case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+    return v.Uint() == 0
+  case reflect.Float32, reflect.Float64:
+    return v.Float() == 0
+  case reflect.Interface, reflect.Ptr:
+    return v.IsNil()
+  }
+  return false
+}
+`
+  fmt.Fprint(out, routines)
   
   return nil
 }
@@ -305,7 +327,8 @@ func indirect(e *ast.Ident, r int) ast.Expr {
 func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) error {
   
   refId := id.Name + refSuffix
-  tspec := fmt.Sprintf(`type %v struct {
+  tspec := fmt.Sprintf(`
+type %v struct {
   Id    %v
   Value *%v
 }
@@ -328,7 +351,7 @@ func (v %v) HasValue() bool {
   refId,
   refId)
   
-  fmt.Fprint(w, "\n"+ tspec +"\n")
+  fmt.Fprint(w, "\n"+ strings.TrimSpace(tspec) +"\n")
   return nil
 }
 
@@ -336,18 +359,18 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
   
   spec, ok := cxt.Types[id.Name]
   if !ok {
-    return fmt.Errorf("No type found for: %v", id.Name)
+    return fmt.Errorf("No type found for: %s", id.Name)
   }
   
   base, ok := spec.Type.(*ast.StructType)
   if !ok {
-    return fmt.Errorf("Base type must be a struct: %v", id.Name)
+    return fmt.Errorf("Base type must be a struct: %s", id.Name)
   }
   
-  decl := fmt.Sprintf(`func (v %v) MarshalJSON() ([]byte, error) {`, id.Name)
+  decl := fmt.Sprintf(`func (v %s) MarshalJSON() ([]byte, error) {`, id.Name)
   var defX, defErr int
   
-  marshal := `  s := "{"`+"\n"
+  marshal := `  fc := 0` +"\n"+ `  s := "{"` +"\n\n"
   if base.Fields != nil {
     for _, e := range base.Fields.List {
       
@@ -376,69 +399,54 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
         if !id.IsExported() {
           continue // ignore unexported fields
         }
-        var f string
+        var f, flags string
         if jtag != "" {
-          f, _ = parseTag(jtag)
+          f, flags = parseTag(jtag)
         }else{
           f = id.Name
         }
+        marshal += fmt.Sprintf(`  // %s`, id.Name) +"\n"
         if rtag != "" {
           r, which := parseTag(rtag)
+          defX++; defErr++
           if which == "" || which == marshalValue {
-            defX++; defErr++
-            marshal += fmt.Sprintf(`  if v.%v != nil {
-    if v.%v.HasValue() {
-      x, err = json.Marshal(%q)
-      if err != nil {
-        return nil, err
-      }
-      s += fmt.Sprintf("%%s:", x)
-      x, err = json.Marshal(v.%v.Value)
-      if err != nil {
-        return nil, err
-      }
-      s += string(x)
-    }
-  }`, id.Name, id.Name, f, id.Name) +"\n"
+            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(srcMarshalRefValue), id.Name, id.Name, f, id.Name)) +"\n"
           }else if which == marshalId {
-            defX++; defErr++
-            marshal += fmt.Sprintf(`  if v.%v != nil {
-    if v.%v.Id != "" {
-      x, err = json.Marshal(%q)
-      if err != nil {
-        return nil, err
-      }
-      s += fmt.Sprintf("%%s:", x)
-      x, err = json.Marshal(v.%v.Id)
-      if err != nil {
-        return nil, err
-      }
-      s += string(x)
-    }
-  }`, id.Name, id.Name, r, id.Name) +"\n"
+            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(srcMarshalRefId), id.Name, id.Name, r, id.Name)) +"\n"
           }else{
             return fmt.Errorf("Invalid marshaling option: %v", which)
           }
         }else{
           defX++; defErr++
-          marshal += fmt.Sprintf(`  x, err = json.Marshal(%q)
-  s += fmt.Sprintf("%%s:", string(x))`, f) +"\n"
+          iv := 1
+          if flags == "omitempty" {
+            marshal += fmt.Sprintf(`  if !isEmptyValue(reflect.ValueOf(v.%s)) {`, id.Name) + "\n"
+            iv++
+          }
+          marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(srcMarshalJson), f, id.Name)) +"\n"
+          if flags == "omitempty" {
+            marshal += `  }` +"\n"
+          }
         }
+        marshal += "\n"
       }
       
     }
   }
   
   marshal += `  s += "}"` + "\n"
-  marshal += `  return []byte(s), nil` + "\n"
-  marshal += `}`
+  if VERBOSE {
+    marshal += fmt.Sprintf(`  fmt.Println(">>>", %q, s)`, id.Name) + "\n"
+  }
+  marshal += `  return []byte(s), nil
+}`
   
   fmt.Fprint(w, "\n"+ decl +"\n")
-  if defX > 0 {
-    fmt.Fprint(w, "  var x []byte\n")
-  }
   if defErr > 0 {
     fmt.Fprint(w, "  var err error\n")
+  }
+  if defX > 0 {
+    fmt.Fprint(w, "  var x []byte\n")
   }
   fmt.Fprint(w, marshal +"\n")
   
@@ -474,3 +482,72 @@ func parseTag(t string) (string, string) {
     return t, ""
   }
 }
+
+func indent(t int, s string) string {
+  r := spaces(t)
+  for _, c := range s {
+    r += string(c)
+    if c == '\n' {
+      r += spaces(t)
+    }
+  }
+  return r
+}
+
+func spaces(t int) string {
+  var s string
+  for i := 0; i < t; i++ {
+    s += "  "
+  }
+  return s
+}
+
+const srcMarshalRefValue = `
+if v.%s != nil {
+  if v.%s.HasValue() {
+    if fc > 0 { s += "," }; fc++
+    x, err = json.Marshal(%q)
+    if err != nil {
+      return nil, err
+    }
+    s += fmt.Sprintf("%%s:", x)
+    x, err = json.Marshal(v.%s.Value)
+    if err != nil {
+      return nil, err
+    }
+    s += string(x)
+  }
+}
+`
+
+const srcMarshalRefId = `
+if v.%s != nil {
+  if v.%s.Id != "" {
+    if fc > 0 { s += "," }; fc++
+    x, err = json.Marshal(%q)
+    if err != nil {
+      return nil, err
+    }
+    s += fmt.Sprintf("%%s:", x)
+    x, err = json.Marshal(v.%s.Id)
+    if err != nil {
+      return nil, err
+    }
+    s += string(x)
+  }
+}
+`
+
+const srcMarshalJson = `
+if fc > 0 { s += "," }; fc++
+x, err = json.Marshal(%q)
+if err != nil {
+  return nil, err
+}
+s += fmt.Sprintf("%%s:", string(x))
+x, err = json.Marshal(v.%s)
+if err != nil {
+  return nil, err
+}
+s += string(x)
+`

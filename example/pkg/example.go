@@ -4,6 +4,7 @@ package main
 
 import (
   "fmt"
+  "encoding/json"
 )
 
 type Int int
@@ -15,7 +16,8 @@ type Complex struct {
 
 type Hello struct {
   A, B string
-  C Int `json:"hello,omitempty" ref:"hello_id"`
+  C Int `json:"hello,omitempty" ref:"hello_id,id"`
+  D int `json:"d,omitempty"`
 }
 
 type Example struct {
@@ -28,5 +30,27 @@ type Another struct {
 }
 
 func main() {
+  var s []byte
+  var err error
+  
+  v := Int(123)
+  c := Hello{}
+  c.C = NewIntRef(&v)
+  
+  s, err = json.Marshal(c)
+  if err != nil {
+    panic(err)
+  }else{
+    fmt.Println(string(s))
+  }
+  
+  c.C = NewIntRefId("abc")
+  s, err = json.Marshal(c)
+  if err != nil {
+    panic(err)
+  }else{
+    fmt.Println(string(s))
+  }
+  
   fmt.Println("OK!")
 }
