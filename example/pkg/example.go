@@ -51,5 +51,13 @@ func main() {
     fmt.Println(string(s))
   }
   
+  d := &Hello{}
+  err = json.Unmarshal(s, d)
+  if err != nil {
+    panic(err)
+  }else{
+    fmt.Printf("%+v\n", d)
+  }
+  
   fmt.Println("OK!")
 }

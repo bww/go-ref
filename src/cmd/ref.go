@@ -76,13 +76,14 @@ type context struct {
   Types     typeSet
   Generate  identSet
   Marshal   identSet
+  Lookup    map[string]*ast.Ident
 }
 
 /**
  * Create a new context
  */
 func newContext(pkg string, opts options) *context {
-  return &context{pkg, opts, make(typeSet), make(identSet), make(identSet)}
+  return &context{pkg, opts, make(typeSet), make(identSet), make(identSet), make(map[string]*ast.Ident)}
 }
 
 /**
@@ -153,7 +154,7 @@ func procDir(dir string, opts options) error {
 func procPackage(cxt *context, fset *token.FileSet, dir string, pkg *ast.Package) error {
   
   for fname, file := range pkg.Files {
-    out, err := refOut(fname)
+    out, err := refWriter(refFile(fname))
     if err != nil {
       return err
     }
@@ -291,38 +292,21 @@ func structType(cxt *context, w io.Writer, fset *token.FileSet, s *ast.StructTyp
           if !id.IsExported() {
             return false, fmt.Errorf("Field must be exported: %v", id.Name)
           }
+          gid := ast.NewIdent(id.Name + refSuffix)
           s.Fields.List[i] = &ast.Field{
             Names:e.Names,
-            Type:indirect(ast.NewIdent(id.Name + refSuffix), 1),
+            Type:indirect(gid, 1),
             Comment:e.Comment,
             Tag:e.Tag,
           }
           cxt.Generate.Add(id)
+          cxt.Lookup[gid.Name] = id
           gen = true
         }
       }
     }
   }
   return gen, nil
-}
-
-func ident(e ast.Expr, r int) (*ast.Ident, int, error) {
-  switch v := e.(type) {
-   case *ast.Ident:
-    return v, r, nil
-   case *ast.StarExpr:
-    return ident(v.X, r + 1)
-   default:
-    return nil, -1, fmt.Errorf("Not an identifier: %T", e)
-  }
-}
-
-func indirect(e *ast.Ident, r int) ast.Expr {
-  v := ast.Expr(e)
-  for i := 0; i < r; i++ {
-    v = &ast.StarExpr{X:v}
-  }
-  return v
 }
 
 func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) error {
@@ -458,19 +442,22 @@ func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident)
   
   marshal := indent(1, strings.TrimSpace(fmt.Sprintf(`
 fields := make(map[string]json.RawMessage)
-fc := 0
-r := &%v{}
 
-err := json.Unmarshal(data, f)
+err := json.Unmarshal(data, fields)
 if err != nil {
   return nil
 }
-  `, id.Name))) +"\n"
+`,))) +"\n"
   
   if base.Fields != nil {
     fields:
     for _, e := range base.Fields.List {
+      ftype, ind, err := ident(e.Type, 0)
+      if err != nil {
+        return err
+      }
       for _, v := range e.Names {
+        
         id, _, err := ident(v, 0)
         if err != nil {
           return err
@@ -487,14 +474,63 @@ if err != nil {
           continue fields
         }
         
+        rev, ok := cxt.Lookup[ftype.Name]
+        if !ok {
+          rev = ftype
+        }
+        
+        var vassign string
+        if policy.Ref {
+          vassign = fmt.Sprintf(`New%v(e)`, ftype.Name)
+        }else{
+          vassign = `e`
+        }
+        
+        marshal += "\n"
         marshal += fmt.Sprintf(`  // %s`, id.Name) +"\n"
-//         marshal += indent(1, strings.TrimSpace(`
-// if f, ok := fields[
-// `)) +"\n"
+        marshal += indent(1, strings.TrimSpace(fmt.Sprintf(`
+if f, ok := fields[%q]; ok {
+  var e %s
+  err := json.Unmarshal(f, &e)
+  if err != nil {
+    return err
+  }
+  if !isEmptyValue(reflect.ValueOf(e)) {
+    v.%s = %s
+  }
+}
+`,      policy.Names.Value, repeat(ind, '*') + rev.Name, id.Name, vassign)))
+        
+        if policy.Ref {
+          marshal += strings.TrimSpace(fmt.Sprintf(`
+else if f, ok = fields[%q]; ok {
+`,        policy.Names.Id))
+          marshal += "\n  "
+          marshal += indent(1, strings.TrimSpace(fmt.Sprintf(`
+  var e %s
+  err := json.Unmarshal(f, &e)
+  if err != nil {
+    return err
+  }
+  if !isEmptyValue(reflect.ValueOf(e)) {
+    v.%v = New%vId(e)
+  }
+}
+`,        idType, id.Name, ftype.Name)))
+        }
+        
+        marshal += "\n"
       }
       
     }
   }
+  
+  if VERBOSE {
+    marshal += "\n"
+    marshal += fmt.Sprintf(`fmt.Printf("<<< %%s %+v\n", fields)`, id.Name)
+  }
+  marshal += "\n"
+  marshal += "  return nil\n"
   marshal += `}`
   
   fmt.Fprint(w, "\n"+ decl +"\n")
@@ -509,8 +545,31 @@ if err != nil {
   return nil
 }
 
-func refOut(f string) (io.Writer, error) {
-  return refWriter(refFile(f))
+func ident(e ast.Expr, r int) (*ast.Ident, int, error) {
+  switch v := e.(type) {
+   case *ast.Ident:
+    return v, r, nil
+   case *ast.StarExpr:
+    return ident(v.X, r + 1)
+   default:
+    return nil, -1, fmt.Errorf("Not an identifier: %T", e)
+  }
+}
+
+func indirect(e *ast.Ident, r int) ast.Expr {
+  v := ast.Expr(e)
+  for i := 0; i < r; i++ {
+    v = &ast.StarExpr{X:v}
+  }
+  return v
+}
+
+func repeat(n int, c rune) string {
+  var s string
+  for i := 0; i < n; i++ {
+    s += string(c)
+  }
+  return s
 }
 
 func refWriter(f string) (io.Writer, error) {
