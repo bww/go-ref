@@ -35,7 +35,6 @@ func main() {
   
   v := Int(123)
   c := Hello{}
-  c.C = NewIntRef(&v)
   
   s, err = json.Marshal(c)
   if err != nil {
@@ -44,7 +43,7 @@ func main() {
     fmt.Println(string(s))
   }
   
-  c.C = NewIntRefId("abc")
+  c.C = &IntRef{"abc", &v}
   s, err = json.Marshal(c)
   if err != nil {
     panic(err)

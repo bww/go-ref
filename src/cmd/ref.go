@@ -194,6 +194,10 @@ import (
     if err != nil {
       return err
     }
+    err = genUnmarshal(cxt, out, fset, v)
+    if err != nil {
+      return err
+    }
   }
   
   routines := `
@@ -440,6 +444,75 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
   }
   marshal += `  return []byte(s), nil
 }`
+  
+  fmt.Fprint(w, "\n"+ decl +"\n")
+  if defErr > 0 {
+    fmt.Fprint(w, "  var err error\n")
+  }
+  if defX > 0 {
+    fmt.Fprint(w, "  var x []byte\n")
+  }
+  fmt.Fprint(w, marshal +"\n")
+  
+  return nil
+}
+
+func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) error {
+  
+  spec, ok := cxt.Types[id.Name]
+  if !ok {
+    return fmt.Errorf("No type found for: %s", id.Name)
+  }
+  
+  base, ok := spec.Type.(*ast.StructType)
+  if !ok {
+    return fmt.Errorf("Base type must be a struct: %s", id.Name)
+  }
+  
+  decl := fmt.Sprintf(`func (v *%s) UnmarshalJSON() error {`, id.Name)
+  var defX, defErr int
+  
+  marshal := `  fc := 0` +"\n"+ `  f := make(map[string]json.RawMessage)` +"\n"
+  if base.Fields != nil {
+    for _, e := range base.Fields.List {
+      
+      var jtag, rtag string
+      if e.Tag != nil  && e.Tag.Kind == token.STRING {
+        tag, err := strconv.Unquote(e.Tag.Value)
+        if err != nil {
+          return err
+        }
+        t := reflect.StructTag(tag)
+        jtag = t.Get(jsonTag)
+        rtag = t.Get(refTag)
+      }
+      
+      if jtag == "-" {
+        continue // explicitly ignored
+      }else if jtag != "" && len(e.Names) > 1 {
+        return fmt.Errorf("Field list has %d identifiers for one tag", len(e.Names))
+      }
+      
+      for _, v := range e.Names {
+        id, _, err := ident(v, 0)
+        if err != nil {
+          return err
+        }
+        if !id.IsExported() {
+          continue // ignore unexported fields
+        }
+        var f, flags string
+        if jtag != "" {
+          f, flags = parseTag(jtag)
+        }else{
+          f = id.Name
+        }
+        marshal += fmt.Sprintf(`  // %s`, id.Name) +"\n"
+      }
+      
+    }
+  }
+  marshal += `}`
   
   fmt.Fprint(w, "\n"+ decl +"\n")
   if defErr > 0 {
