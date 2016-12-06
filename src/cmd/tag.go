@@ -2,14 +2,28 @@ package main
 
 import (
   "fmt"
-  "go/ast"
+  "strings"
   "strconv"
   "reflect"
+  "go/ast"
+  "go/token"
 )
 
 const (
-  refTag  = "ref"
-  jsonTag = "json"
+  refTag          = "ref"
+  jsonTag         = "json"
+  omitEmpty       = "omitempty"
+)
+
+const (
+  marshalIdTag    = "id"
+  marshalValueTag = "value"
+)
+
+type marshalVariant int
+const (
+  marshalId       = marshalVariant(iota)
+  marshalValue    = marshalVariant(iota)
 )
 
 type fieldNames struct {
@@ -17,15 +31,16 @@ type fieldNames struct {
 }
 
 type marshalPolicy struct {
-  Names fieldNames
-  Omit, OmitEmpty bool
+  Names   fieldNames
+  Marshal marshalVariant
+  Ref, Omit, OmitEmpty bool
 }
 
-func fieldMarshalPolicy(f *ast.Field) (marshalPolicy, error) {
-  var jtag, rtag string
+func fieldMarshalPolicy(field *ast.Field, id *ast.Ident) (marshalPolicy, error) {
+  var jtag, rtag, name, flags string
   
-  if f.Tag != nil  && f.Tag.Kind == token.STRING {
-    tag, err := strconv.Unquote(f.Tag.Value)
+  if field.Tag != nil  && field.Tag.Kind == token.STRING {
+    tag, err := strconv.Unquote(field.Tag.Value)
     if err != nil {
       return marshalPolicy{}, err
     }
@@ -36,10 +51,34 @@ func fieldMarshalPolicy(f *ast.Field) (marshalPolicy, error) {
   
   if jtag == "-" || rtag == "-" {
     return marshalPolicy{Omit:true}, nil
-  }else if jtag != "" && len(e.Names) > 1 {
-    return marshalPolicy{}, fmt.Errorf("Field list has %d identifiers for one tag", len(e.Names))
+  }else if jtag != "" && len(field.Names) > 1 {
+    return marshalPolicy{}, fmt.Errorf("Field list has %d identifiers for one tag", len(field.Names))
   }
   
+  policy := marshalPolicy{}
+  
+  if jtag != "" {
+    name, flags = parseTag(jtag)
+  }else{
+    name = id.Name
+  }
+  
+  policy.Names.Value = name
+  policy.OmitEmpty = policy.OmitEmpty || flags == omitEmpty
+  
+  if rtag != "" {
+    name, flags = parseTag(rtag)
+    policy.Ref  = true
+  }
+  
+  policy.Names.Id = name
+  if flags == marshalValueTag {
+    policy.Marshal = marshalValue
+  }else{
+    policy.Marshal = marshalId
+  }
+  
+  return policy, nil
 }
 
 func parseTag(t string) (string, string) {
