@@ -527,7 +527,7 @@ else if f, ok = fields[%q]; ok {
   
   if VERBOSE {
     marshal += "\n"
-    marshal += fmt.Sprintf(`fmt.Printf("<<< %%s %+v\n", fields)`, id.Name)
+    marshal += fmt.Sprintf(`  fmt.Printf("<<< %s %%+v\n", fields)`, id.Name)
   }
   marshal += "\n"
   marshal += "  return nil\n"
