@@ -381,9 +381,41 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
         if policy.Ref {
           defX++; defErr++
           if policy.Marshal == marshalValue {
-            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(srcMarshalRefValue), id.Name, id.Name, policy.Names.Value, id.Name)) +"\n"
+            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(`
+if v.%s != nil {
+  if v.%s.HasValue() {
+    if fc > 0 { s += "," }; fc++
+    x, err = json.Marshal(%q)
+    if err != nil {
+      return nil, err
+    }
+    s += fmt.Sprintf("%%s:", x)
+    x, err = json.Marshal(v.%s.Value)
+    if err != nil {
+      return nil, err
+    }
+    s += string(x)
+  }
+}
+`),         id.Name, id.Name, policy.Names.Value, id.Name)) +"\n"
           }else if policy.Marshal == marshalId {
-            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(srcMarshalRefId), id.Name, id.Name, policy.Names.Id, id.Name)) +"\n"
+            marshal += indent(1, fmt.Sprintf(strings.TrimSpace(`
+if v.%s != nil {
+  if v.%s.Id != "" {
+    if fc > 0 { s += "," }; fc++
+    x, err = json.Marshal(%q)
+    if err != nil {
+      return nil, err
+    }
+    s += fmt.Sprintf("%%s:", x)
+    x, err = json.Marshal(v.%s.Id)
+    if err != nil {
+      return nil, err
+    }
+    s += string(x)
+  }
+}
+`),         id.Name, id.Name, policy.Names.Id, id.Name)) +"\n"
           }else{
             return fmt.Errorf("Invalid marshaling variant: %v", policy.Marshal)
           }
@@ -394,7 +426,19 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident) e
             marshal += fmt.Sprintf(`  if !isEmptyValue(reflect.ValueOf(v.%s)) {`, id.Name) + "\n"
             iv++
           }
-          marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(srcMarshalJson), policy.Names.Value, id.Name)) +"\n"
+          marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(`
+if fc > 0 { s += "," }; fc++
+x, err = json.Marshal(%q)
+if err != nil {
+  return nil, err
+}
+s += fmt.Sprintf("%%s:", string(x))
+x, err = json.Marshal(v.%s)
+if err != nil {
+  return nil, err
+}
+s += string(x)
+`),         policy.Names.Value, id.Name)) +"\n"
           if policy.OmitEmpty {
             marshal += `  }` +"\n"
           }
@@ -608,53 +652,3 @@ func spaces(t int) string {
   }
   return s
 }
-
-const srcMarshalRefValue = `
-if v.%s != nil {
-  if v.%s.HasValue() {
-    if fc > 0 { s += "," }; fc++
-    x, err = json.Marshal(%q)
-    if err != nil {
-      return nil, err
-    }
-    s += fmt.Sprintf("%%s:", x)
-    x, err = json.Marshal(v.%s.Value)
-    if err != nil {
-      return nil, err
-    }
-    s += string(x)
-  }
-}
-`
-
-const srcMarshalRefId = `
-if v.%s != nil {
-  if v.%s.Id != "" {
-    if fc > 0 { s += "," }; fc++
-    x, err = json.Marshal(%q)
-    if err != nil {
-      return nil, err
-    }
-    s += fmt.Sprintf("%%s:", x)
-    x, err = json.Marshal(v.%s.Id)
-    if err != nil {
-      return nil, err
-    }
-    s += string(x)
-  }
-}
-`
-
-const srcMarshalJson = `
-if fc > 0 { s += "," }; fc++
-x, err = json.Marshal(%q)
-if err != nil {
-  return nil, err
-}
-s += fmt.Sprintf("%%s:", string(x))
-x, err = json.Marshal(v.%s)
-if err != nil {
-  return nil, err
-}
-s += string(x)
-`
