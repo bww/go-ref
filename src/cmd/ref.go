@@ -608,14 +608,6 @@ func indirect(e *ast.Ident, r int) ast.Expr {
   return v
 }
 
-func repeat(n int, c rune) string {
-  var s string
-  for i := 0; i < n; i++ {
-    s += string(c)
-  }
-  return s
-}
-
 func refWriter(f string) (io.Writer, error) {
   if DEBUG {
     return os.Stdout, nil
@@ -632,23 +624,4 @@ func refFile(src string) string {
   base := path.Base(src)
   ext  := path.Ext(src)
   return path.Join(path.Dir(src), base[:len(base) - len(ext)] +"_ref"+ ext)
-}
-
-func indent(t int, s string) string {
-  r := spaces(t)
-  for _, c := range s {
-    r += string(c)
-    if c == '\n' {
-      r += spaces(t)
-    }
-  }
-  return r
-}
-
-func spaces(t int) string {
-  var s string
-  for i := 0; i < t; i++ {
-    s += "  "
-  }
-  return s
 }
