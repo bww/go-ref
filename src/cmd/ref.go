@@ -443,9 +443,9 @@ func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ast.Ident)
   marshal := indent(1, strings.TrimSpace(fmt.Sprintf(`
 fields := make(map[string]json.RawMessage)
 
-err := json.Unmarshal(data, fields)
+err := json.Unmarshal(data, &fields)
 if err != nil {
-  return nil
+  return err
 }
 `,))) +"\n"
   

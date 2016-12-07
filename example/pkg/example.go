@@ -55,8 +55,14 @@ func main() {
   err = json.Unmarshal(s, d)
   if err != nil {
     panic(err)
-  }else{
-    fmt.Printf("%+v\n", d)
+  }
+  
+  if d.C != nil {
+    if d.C.HasValue() {
+      fmt.Printf("HAS VALUE: %+v\n", d.C.Value)
+    }else{
+      fmt.Printf("HAS IDENT: %+v\n", d.C.Id)
+    }
   }
   
   fmt.Println("OK!")
