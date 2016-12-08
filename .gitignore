@@ -1,8 +1,7 @@
-build/
-
 # Run-time data directories
 **/dist/
 **/target/
+**/bin/
 
 .DS_Store
 

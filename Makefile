@@ -1,14 +1,29 @@
 
-export GOPATH := $(GOPATH):$(PWD)
+# the product we're building
+NAME := goref
+# the product's main package
+MAIN := ./src/cmd
+# fix our gopath
+GOPATH := $(GOPATH):$(PWD)
 
-.PHONY: all deps test build
+# build and packaging
+TARGETS	:= $(PWD)/bin
+PRODUCT	:= $(TARGETS)/$(NAME)
 
-all: test
+# sources
+SRC = $(shell find src -name \*.go -print)
 
-deps:
+.PHONY: all build test clean
 
-test:
-	go test -test.v ./src/cmd
+all: build
 
-build:
-	go build -o bin/goref ./src/cmd
+$(PRODUCT): $(SRC)
+	go build -o $@ $(MAIN)
+
+build: $(PRODUCT) ## Build the product
+
+test: ## Run tests
+	go test -test.v cmd
+
+clean: ## Delete the built product and any generated files
+	rm -rf $(TARGETS)
