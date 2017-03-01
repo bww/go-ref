@@ -10,19 +10,21 @@ import (
 type Int int
 
 type Complex struct {
-  A string  `json:"a,omitempty"`
-  B int     `json:"b"`
+  A string              `json:"a,omitempty"`
+  B int                 `json:"b"`
 }
 
 type Hello struct {
   A, B string
-  C Int `json:"hello,omitempty" ref:"hello_id,id"`
-  D int `json:"d,omitempty"`
+  C Int                 `json:"hello,omitempty" ref:"hello_id,id"`
+  D int                 `json:"d,omitempty"`
+  E json.RawMessage     `json:"c" ref:"c_id"`
 }
 
 type Example struct {
-  A   *Int      `json:"a" ref:"a_id,value"`
-  B   *Complex  `json:"b" ref:"b_id,id"`
+  A   *Int              `json:"a" ref:"a_id,value"`
+  B   *Complex          `json:"b" ref:"b_id,id"`
+  C   *json.RawMessage  `json:"c" ref:"c_id,id"`
 }
 
 type Another struct {

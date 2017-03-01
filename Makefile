@@ -23,7 +23,7 @@ $(PRODUCT): $(SRC)
 build: $(PRODUCT) ## Build the product
 
 test: ## Run tests
-	go test -test.v cmd
+	go test -test.v ./src/cmd
 
 clean: ## Delete the built product and any generated files
 	rm -rf $(TARGETS)
