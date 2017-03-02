@@ -30,13 +30,7 @@ type importSet map[string]*ast.ImportSpec
  * Add an import to the set
  */
 func (s importSet) Add(t *ast.ImportSpec) {
-  var name string
-  if id := t.Name; id != nil {
-    name = id.Name
-  }else{
-    name = path.Base(stringLit(t.Path))
-  }
-  s[name] = t
+  s[importPackage(t)] = t
 }
 
 /**
@@ -288,9 +282,11 @@ func isEmptyValue(v ref_reflect.Value) bool {
 }
 
 func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.File) error {
+  pkgrefs := make(map[string]int)
   fcxt := &source{}
   nerr := 0
   
+  // traverse the source first to handle types
   ast.Inspect(file, func(n ast.Node) bool {
     switch t := n.(type) {
       case *ast.GenDecl:
@@ -304,6 +300,32 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
   })
   
   if nerr < 1 && fcxt.Generate > 0 {
+    
+    // traverse the source a second time to compile a set of package references
+    ast.Inspect(file, func(n ast.Node) bool {
+      switch t := n.(type) {
+        case *ast.SelectorExpr:
+          e := leftmost(t)
+          if id, ok := e.(*ast.Ident); ok {
+            n := pkgrefs[id.Name]
+            n++
+            pkgrefs[id.Name] = n
+          }
+          return false
+      }
+      return true
+    })
+    
+    // trim unused imports
+    updateImports := make([]*ast.ImportSpec, 0)
+    for _, e := range file.Imports {
+      p := importPackage(e)
+      if _, ok := pkgrefs[p]; ok {
+        updateImports = append(updateImports, e)
+      }
+    }
+    file.Imports = updateImports
+    
     w, err := refWriter(dst)
     if err != nil {
       return err

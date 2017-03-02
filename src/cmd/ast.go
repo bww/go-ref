@@ -2,6 +2,7 @@ package main
 
 import (
   "fmt"
+  "path"
   "strconv"
   "go/ast"
   "go/token"
@@ -60,6 +61,14 @@ func indirect(e *ast.Ident, r int) ast.Expr {
     v = &ast.StarExpr{X:v}
   }
   return v
+}
+
+func importPackage(e *ast.ImportSpec) string {
+  if id := e.Name; id != nil {
+    return id.Name
+  }else{
+    return path.Base(stringLit(e.Path))
+  }
 }
 
 func stringLit(e *ast.BasicLit) string {
