@@ -317,11 +317,18 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
     })
     
     // trim unused imports
-    for _, e := range file.Imports {
+    for i, e := range file.Imports {
       p := importPackage(e)
       if _, ok := pkgrefs[p]; !ok {
-        e.Name = nil
-        e.Path.Value = "// "+ e.Path.Value // seems weird, but this works
+        dup := &ast.ImportSpec{
+          Path: &ast.BasicLit{
+            ValuePos: e.Path.ValuePos,
+            Kind: e.Path.Kind,
+            Value: "// "+ e.Path.Value,
+          },
+        }
+        fmt.Println(">>>", dup.Path.Value)
+        file.Imports[i] = dup
       }
     }
     
