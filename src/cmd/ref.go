@@ -317,14 +317,13 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
     })
     
     // trim unused imports
-    updateImports := make([]*ast.ImportSpec, 0)
     for _, e := range file.Imports {
       p := importPackage(e)
-      if _, ok := pkgrefs[p]; ok {
-        updateImports = append(updateImports, e)
+      if _, ok := pkgrefs[p]; !ok {
+        e.Name = nil
+        e.Path.Value = "// "+ e.Path.Value // seems weird, but this works
       }
     }
-    file.Imports = updateImports
     
     w, err := refWriter(dst)
     if err != nil {
