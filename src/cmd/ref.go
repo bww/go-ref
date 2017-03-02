@@ -110,7 +110,8 @@ type context struct {
   Package   string
   Options   options
   Imports   importSet
-  Deps      []*ast.ImportSpec
+  Deps      importSet
+  // Shadow    importSet
   Types     typeSet
   Generate  identSet
   Marshal   identSet
@@ -121,7 +122,7 @@ type context struct {
  * Create a new context
  */
 func newContext(pkg string, opts options) *context {
-  return &context{pkg, opts, make(importSet), nil, make(typeSet), make(identSet), make(identSet), make(map[string]*ast.Ident)}
+  return &context{pkg, opts, make(importSet), make(importSet), make(typeSet), make(identSet), make(identSet), make(map[string]*ast.Ident)}
 }
 
 /**
@@ -227,15 +228,21 @@ func procPackage(cxt *context, fset *token.FileSet, dir string, pkg *ast.Package
 package %v
 
 import (
-  "fmt"
-  "reflect"
-  "encoding/json"
+  ref_fmt "fmt"
+  ref_reflect "reflect"
+  ref_json "encoding/json"
 )
 `, outpkg, cxt.Package)
     
-    fmt.Fprintf(out, "\n// Dependency imports\n")
-    fmt.Println(">>>", len(cxt.Deps), cxt.Deps)
-    printSource(out, fset, cxt.Deps)
+    if len(cxt.Deps) > 0 {
+      fmt.Fprintf(out, "\n// Dependency imports\nimport (\n")
+      for _, e := range cxt.Deps {
+        fmt.Fprintf(out, "  ")
+        printSource(out, fset, e)
+        fmt.Fprintf(out, "\n")
+      }
+      fmt.Fprintf(out, ")\n")
+    }
     
     for _, v := range cxt.Generate {
       err := genType(cxt, out, fset, v)
@@ -256,19 +263,19 @@ import (
     }
     
     routines := `
-func isEmptyValue(v reflect.Value) bool {
+func isEmptyValue(v ref_reflect.Value) bool {
   switch v.Kind() {
-  case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+  case ref_reflect.Array, ref_reflect.Map, ref_reflect.Slice, ref_reflect.String:
     return v.Len() == 0
-  case reflect.Bool:
+  case ref_reflect.Bool:
     return !v.Bool()
-  case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+  case ref_reflect.Int, ref_reflect.Int8, ref_reflect.Int16, ref_reflect.Int32, ref_reflect.Int64:
     return v.Int() == 0
-  case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+  case ref_reflect.Uint, ref_reflect.Uint8, ref_reflect.Uint16, ref_reflect.Uint32, ref_reflect.Uint64, ref_reflect.Uintptr:
     return v.Uint() == 0
-  case reflect.Float32, reflect.Float64:
+  case ref_reflect.Float32, ref_reflect.Float64:
     return v.Float() == 0
-  case reflect.Interface, reflect.Ptr:
+  case ref_reflect.Interface, ref_reflect.Ptr:
     return v.IsNil()
   }
   return false
@@ -373,7 +380,7 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
               if !ok {
                 return false, fmt.Errorf("Referenced package has no corresponding import: %v", p)
               }
-              cxt.Deps = append(cxt.Deps, m)
+              cxt.Deps.Add(m)
             }
           }
           
@@ -473,12 +480,12 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) 
 if v.%s != nil {
   if v.%s.HasValue() {
     if fc > 0 { s += "," }; fc++
-    x, err = json.Marshal(%q)
+    x, err = ref_json.Marshal(%q)
     if err != nil {
       return nil, err
     }
-    s += fmt.Sprintf("%%s:", x)
-    x, err = json.Marshal(v.%s.Value)
+    s += ref_fmt.Sprintf("%%s:", x)
+    x, err = ref_json.Marshal(v.%s.Value)
     if err != nil {
       return nil, err
     }
@@ -491,12 +498,12 @@ if v.%s != nil {
 if v.%s != nil {
   if v.%s.Id != "" {
     if fc > 0 { s += "," }; fc++
-    x, err = json.Marshal(%q)
+    x, err = ref_json.Marshal(%q)
     if err != nil {
       return nil, err
     }
-    s += fmt.Sprintf("%%s:", x)
-    x, err = json.Marshal(v.%s.Id)
+    s += ref_fmt.Sprintf("%%s:", x)
+    x, err = ref_json.Marshal(v.%s.Id)
     if err != nil {
       return nil, err
     }
@@ -516,12 +523,12 @@ if v.%s != nil {
           }
           marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(`
 if fc > 0 { s += "," }; fc++
-x, err = json.Marshal(%q)
+x, err = ref_json.Marshal(%q)
 if err != nil {
   return nil, err
 }
-s += fmt.Sprintf("%%s:", string(x))
-x, err = json.Marshal(v.%s)
+s += ref_fmt.Sprintf("%%s:", string(x))
+x, err = ref_json.Marshal(v.%s)
 if err != nil {
   return nil, err
 }
@@ -540,7 +547,7 @@ s += string(x)
   
   marshal += `  s += "}"` + "\n"
   if VERBOSE {
-    marshal += fmt.Sprintf(`  fmt.Println(">>>", %q, s)`, id.Name) + "\n"
+    marshal += fmt.Sprintf(`  ref_fmt.Println(">>>", %q, s)`, id.Name) + "\n"
   }
   marshal += `  return []byte(s), nil
 }`
@@ -574,9 +581,9 @@ func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair
   var defX, defErr int
   
   marshal := indent(1, strings.TrimSpace(fmt.Sprintf(`
-fields := make(map[string]json.RawMessage)
+fields := make(map[string]ref_json.RawMessage)
 
-err := json.Unmarshal(data, &fields)
+err := ref_json.Unmarshal(data, &fields)
 if err != nil {
   return err
 }
@@ -624,7 +631,7 @@ if err != nil {
         marshal += indent(1, strings.TrimSpace(fmt.Sprintf(`
 if f, ok := fields[%q]; ok {
   var e %s
-  err := json.Unmarshal(f, &e)
+  err := ref_json.Unmarshal(f, &e)
   if err != nil {
     return err
   }
@@ -641,7 +648,7 @@ else if f, ok = fields[%q]; ok {
           marshal += "\n  "
           marshal += indent(1, strings.TrimSpace(fmt.Sprintf(`
   var e %s
-  err := json.Unmarshal(f, &e)
+  err := ref_json.Unmarshal(f, &e)
   if err != nil {
     return err
   }
@@ -660,7 +667,7 @@ else if f, ok = fields[%q]; ok {
   
   if VERBOSE {
     marshal += "\n"
-    marshal += fmt.Sprintf(`  fmt.Printf("<<< %s %%+v\n", fields)`, id.Name)
+    marshal += fmt.Sprintf(`  ref_fmt.Printf("<<< %s %%+v\n", fields)`, id.Name)
   }
   marshal += "\n"
   marshal += "  return nil\n"
