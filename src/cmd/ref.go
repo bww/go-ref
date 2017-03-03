@@ -669,7 +669,7 @@ if f, ok := fields[%q]; ok {
   if err != nil {
     return err
   }
-  if !isEmptyValue(reflect.ValueOf(e)) {
+  if !isEmptyValue(ref_reflect.ValueOf(e)) {
     v.%s = %s
   }
 }
@@ -686,7 +686,7 @@ else if f, ok = fields[%q]; ok {
   if err != nil {
     return err
   }
-  if !isEmptyValue(reflect.ValueOf(e)) {
+  if !isEmptyValue(ref_reflect.ValueOf(e)) {
     v.%v = New%vId(e)
   }
 }
