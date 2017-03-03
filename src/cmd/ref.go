@@ -105,7 +105,6 @@ type context struct {
   Options   options
   Imports   importSet
   Deps      importSet
-  // Shadow    importSet
   Types     typeSet
   Generate  identSet
   Marshal   identSet
@@ -325,7 +324,6 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
             if m, ok := s.(*ast.ImportSpec); ok {
               p := importPackage(m)
               if _, ok := pkgrefs[p]; !ok {
-                fmt.Println(">>>", stringLit(m.Path))
                 g.Specs[i] = &ast.ImportSpec{
                   Path: &ast.BasicLit{
                     ValuePos: m.Path.ValuePos,
