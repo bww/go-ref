@@ -552,7 +552,7 @@ if v.%s != nil {
           defX++; defErr++
           iv := 1
           if policy.OmitEmpty {
-            marshal += fmt.Sprintf(`  if !isEmptyValue(reflect.ValueOf(v.%s)) {`, baseId.Name) + "\n"
+            marshal += fmt.Sprintf(`  if !isEmptyValue(ref_reflect.ValueOf(v.%s)) {`, baseId.Name) + "\n"
             iv++
           }
           marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(`
