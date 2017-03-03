@@ -316,19 +316,27 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
       return true
     })
     
-    // trim unused imports
-    for i, e := range file.Imports {
-      p := importPackage(e)
-      if _, ok := pkgrefs[p]; !ok {
-        dup := &ast.ImportSpec{
-          Path: &ast.BasicLit{
-            ValuePos: e.Path.ValuePos,
-            Kind: e.Path.Kind,
-            Value: "// "+ e.Path.Value,
-          },
+    // trim unused imports from decls (this is what's actually used by the printer)
+    // file.Imports seems to just be a higher-level convenience, which we don't bother with
+    for _, e := range file.Decls {
+      if g, ok := e.(*ast.GenDecl); ok {
+        if g.Tok == token.IMPORT {
+          for i, s := range g.Specs {
+            if m, ok := s.(*ast.ImportSpec); ok {
+              p := importPackage(m)
+              if _, ok := pkgrefs[p]; !ok {
+                fmt.Println(">>>", stringLit(m.Path))
+                g.Specs[i] = &ast.ImportSpec{
+                  Path: &ast.BasicLit{
+                    ValuePos: m.Path.ValuePos,
+                    Kind: m.Path.Kind,
+                    Value: "// "+ m.Path.Value,
+                  },
+                }
+              }
+            }
+          }
         }
-        fmt.Println(">>>", dup.Path.Value)
-        file.Imports[i] = dup
       }
     }
     
