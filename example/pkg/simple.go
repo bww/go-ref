@@ -8,9 +8,9 @@ import (
 )
 
 type SimpleHello struct {
-  A json.RawMessage   `json:"a" ref:"a_id"`
+  A json.RawMessage     `json:"as" ref:"a_ids"`
 }
 
 type SimpleExample struct {
-  A *json.RawMessage  `json:"a" ref:"a_id,id"`
+  A []*json.RawMessage  `json:"as" ref:"a_ids,id"`
 }

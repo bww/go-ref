@@ -3,6 +3,7 @@ package main
 import (
   "fmt"
   "path"
+  "strings"
   "strconv"
   "go/ast"
   "go/token"
@@ -68,6 +69,15 @@ func importPackage(e *ast.ImportSpec) string {
     return id.Name
   }else{
     return path.Base(stringLit(e.Path))
+  }
+}
+
+func commentText(c *ast.Comment) string {
+  t := c.Text
+  if len(t) > 2 && t[:2] == "//" {
+    return strings.TrimSpace(t[2:])
+  }else{
+    return t
   }
 }
 

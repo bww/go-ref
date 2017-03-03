@@ -77,6 +77,14 @@ const (
   pkgSrc        = "pkg_ref.go"
 )
 
+/**
+ * Macros
+ */
+const (
+  macro         = "+goref"
+  macroIgnore   = "ignore"
+)
+
 var (
   idType        = "string"
 )
@@ -172,7 +180,7 @@ func procDir(dir string, opts options) error {
     return !strings.HasSuffix(info.Name(), "_ref.go")
   }
   
-  pkgs, err := parser.ParseDir(fset, dir, excludeGenerated, 0)
+  pkgs, err := parser.ParseDir(fset, dir, excludeGenerated, parser.ParseComments)
   if err != nil {
     return err
   }
@@ -284,6 +292,22 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
   pkgrefs := make(map[string]int)
   fcxt := &source{}
   nerr := 0
+  
+  // check the first line comment group for macro directives
+  if len(file.Comments) > 0 {
+    for _, e := range file.Comments[0].List {
+      c, t := args(commentText(e))
+      if c == macro {
+        c, t = args(t)
+        if c == macroIgnore {
+          if VERBOSE {
+            fmt.Printf("%v: skipping ignored source: %v\n", CMD, src)
+          }
+          return nil
+        }
+      }
+    }
+  }
   
   // traverse the source first to handle types
   ast.Inspect(file, func(n ast.Node) bool {
