@@ -7,14 +7,10 @@ import (
   "encoding/json"
 )
 
-type Hello struct {
+type SimpleHello struct {
   A json.RawMessage   `json:"a" ref:"a_id"`
 }
 
-type Example struct {
+type SimpleExample struct {
   A *json.RawMessage  `json:"a" ref:"a_id,id"`
-}
-
-func main() {
-  fmt.Println("OK!")
 }
