@@ -445,6 +445,7 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
           
           cxt.Generate.Add(id)
           cxt.Lookup[genId.Name] = id
+          fmt.Println("!!!", genId.Name, id)
           src.Generate++
           gen = true
         }
@@ -667,6 +668,8 @@ if err != nil {
         if !ok {
           rev = ftype
         }
+        fmt.Println("FTYPE:", ftype)
+        fmt.Println("REV:", rev)
         
         var vassign string
         if policy.Ref {
