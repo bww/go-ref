@@ -27,5 +27,12 @@ func testIdent(t *testing.T, c testCase) {
 }
 
 func TestParseIdent(t *testing.T) {
+  testIdent(t, testCase{`Example`, newIdent(`Example`, `Example`, 0, 0)})
+  testIdent(t, testCase{`example`, newIdent(`example`, `example`, 0, 0)})
+  testIdent(t, testCase{`foo.bar.Car`, newIdent(`foo.bar.Car`, `Car`, 0, 0)})
+  testIdent(t, testCase{`*Example`, newIdent(`*Example`, `Example`, 1, 0)})
+  testIdent(t, testCase{`[]Example`, newIdent(`[]Example`, `Example`, 0, 1)})
   testIdent(t, testCase{`[]*json.RawMessage`, newIdent(`[]*json.RawMessage`, `RawMessage`, 1, 1)})
+  testIdent(t, testCase{`[][]*json.RawMessage`, newIdent(`[][]*json.RawMessage`, `RawMessage`, 1, 2)})
+  testIdent(t, testCase{`[][]**json.RawMessage`, newIdent(`[][]**json.RawMessage`, `RawMessage`, 2, 2)})
 }
