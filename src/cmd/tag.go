@@ -36,7 +36,7 @@ type marshalPolicy struct {
   Ref, Omit, OmitEmpty bool
 }
 
-func fieldMarshalPolicy(field *ast.Field, id *ast.Ident) (marshalPolicy, error) {
+func fieldMarshalPolicy(field *ast.Field, id *ident) (marshalPolicy, error) {
   var jtag, rtag, name, flags string
   
   if field.Tag != nil  && field.Tag.Kind == token.STRING {
@@ -60,7 +60,7 @@ func fieldMarshalPolicy(field *ast.Field, id *ast.Ident) (marshalPolicy, error) 
   if jtag != "" {
     name, flags = parseTag(jtag)
   }else{
-    name = id.Name
+    name = id.Base
   }
   
   policy.Names.Value = name

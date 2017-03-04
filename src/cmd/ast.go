@@ -20,6 +20,10 @@ func newIdent(name, base string, inds, dims int) *ident {
   return &ident{name, base, inds, dims}
 }
 
+func astIdent(id *ast.Ident) *ident {
+  return &ident{id.Name, id.Name, 0, 0}
+}
+
 func parseIdent(e ast.Expr) (*ident, error) {
   d, err := parseIdentR(e, 0, 0)
   if err != nil {
@@ -40,7 +44,7 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
   switch v := e.(type) {
     
     case *ast.Ident:
-      return newIdent(v, v.Name, v.Name, r, d)
+      return newIdent(v.Name, v.Name, r, d), nil
       
     case *ast.StarExpr:
       return parseIdentR(v.X, r + 1, d)
@@ -50,8 +54,7 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       if err != nil {
         return nil, err
       }
-      c := p +"."+ s
-      return newIdent(ast.NewIdent(c), c, s, n, d), nil
+      return newIdent(p +"."+ s, s, n, d), nil
       
     case *ast.ArrayType:
       if v.Len != nil {

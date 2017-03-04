@@ -109,14 +109,14 @@ type context struct {
   Types     typeSet
   Generate  identSet
   Marshal   identSet
-  Lookup    map[string]*ast.Ident
+  Lookup    map[string]*ident
 }
 
 /**
  * Create a new context
  */
 func newContext(pkg string, opts options) *context {
-  return &context{pkg, opts, make(importSet), make(importSet), make(typeSet), make(identSet), make(identSet), make(map[string]*ast.Ident)}
+  return &context{pkg, opts, make(importSet), make(importSet), make(typeSet), make(identSet), make(identSet), make(map[string]*ident)}
 }
 
 /**
@@ -383,7 +383,7 @@ func typeSpecs(cxt *context, src *source, fset *token.FileSet, s []ast.Spec) err
           return err
         }
         if gen {
-          cxt.Marshal.Add(v.Name, v.Name)
+          cxt.Marshal.Add(astIdent(v.Name))
         }
     }
   }
@@ -416,12 +416,12 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
         if ref := t.Get(refTag); ref != "" {
           
           // NOTE INDIRECTS HERE FOR UNDERLYING VALUE IN GENERATED TYPE?
-          id, baseId, _, err := ident(e.Type, 0)
+          id, err := parseIdent(e.Type)
           if err != nil {
             return false, err
           }
-          if !baseId.IsExported() {
-            return false, fmt.Errorf("Field must be exported: %v", baseId.Name)
+          if !ast.IsExported(id.Base) {
+            return false, fmt.Errorf("Field must be exported: %v", id.Base)
           }
           
           if c, ok := e.Type.(*ast.SelectorExpr); ok {
@@ -435,7 +435,7 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
             }
           }
           
-          genId := ast.NewIdent(baseId.Name + refSuffix)
+          genId := ast.NewIdent(id.Base + refSuffix)
           s.Fields.List[i] = &ast.Field{
             Names:e.Names,
             Type:indirect(genId, 1),
@@ -443,7 +443,7 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
             Tag:e.Tag,
           }
           
-          cxt.Generate.Add(id, baseId)
+          cxt.Generate.Add(id)
           cxt.Lookup[genId.Name] = id
           src.Generate++
           gen = true
@@ -454,9 +454,9 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
   return gen, nil
 }
 
-func genType(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) error {
+func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ident) error {
   
-  refId := pair.BaseId.Name + refSuffix
+  refId := id.Base + refSuffix
   tspec := fmt.Sprintf(`
 type %v struct {
   Id    %v
@@ -474,8 +474,8 @@ func New%vId(v %v) *%v {
 func (v %v) HasValue() bool {
   return v.Value != nil
 }`,
-  refId, idType, pair.Id.Name,
-  refId, pair.Id.Name, refId,
+  refId, idType, id.Name,
+  refId, id.Name, refId,
   refId,
   refId, idType, refId,
   refId,
@@ -485,8 +485,7 @@ func (v %v) HasValue() bool {
   return nil
 }
 
-func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) error {
-  id := pair.Id
+func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ident) error {
   
   spec, ok := cxt.Types[id.Name]
   if !ok {
@@ -507,11 +506,11 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) 
     for _, e := range base.Fields.List {
       for _, v := range e.Names {
         
-        id, baseId, _, err := ident(v, 0)
+        id, err := parseIdent(v)
         if err != nil {
           return err
         }
-        if !baseId.IsExported() {
+          if !ast.IsExported(id.Base) {
           continue // ignore unexported fields
         }
         
@@ -523,7 +522,7 @@ func genMarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) 
           continue fields
         }
         
-        marshal += fmt.Sprintf(`  // %s`, baseId.Name) +"\n"
+        marshal += fmt.Sprintf(`  // %s`, id.Base) +"\n"
         if policy.Ref {
           defX++; defErr++
           if policy.Marshal == marshalValue {
@@ -543,7 +542,7 @@ if v.%s != nil {
     s += string(x)
   }
 }
-`),         baseId.Name, baseId.Name, policy.Names.Value, baseId.Name)) +"\n"
+`),         id.Base, id.Base, policy.Names.Value, id.Base)) +"\n"
           }else if policy.Marshal == marshalId {
             marshal += indent(1, fmt.Sprintf(strings.TrimSpace(`
 if v.%s != nil {
@@ -561,7 +560,7 @@ if v.%s != nil {
     s += string(x)
   }
 }
-`),         baseId.Name, baseId.Name, policy.Names.Id, baseId.Name)) +"\n"
+`),         id.Base, id.Base, policy.Names.Id, id.Base)) +"\n"
           }else{
             return fmt.Errorf("Invalid marshaling variant: %v", policy.Marshal)
           }
@@ -569,7 +568,7 @@ if v.%s != nil {
           defX++; defErr++
           iv := 1
           if policy.OmitEmpty {
-            marshal += fmt.Sprintf(`  if !isEmptyValue(ref_reflect.ValueOf(v.%s)) {`, baseId.Name) + "\n"
+            marshal += fmt.Sprintf(`  if !isEmptyValue(ref_reflect.ValueOf(v.%s)) {`, id.Base) + "\n"
             iv++
           }
           marshal += indent(iv, fmt.Sprintf(strings.TrimSpace(`
@@ -584,7 +583,7 @@ if err != nil {
   return nil, err
 }
 s += string(x)
-`),         policy.Names.Value, baseId.Name)) +"\n"
+`),         policy.Names.Value, id.Base)) +"\n"
           if policy.OmitEmpty {
             marshal += `  }` +"\n"
           }
@@ -615,8 +614,7 @@ s += string(x)
   return nil
 }
 
-func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, pair identPair) error {
-  id := pair.Id
+func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ident) error {
   
   spec, ok := cxt.Types[id.Name]
   if !ok {
@@ -643,17 +641,17 @@ if err != nil {
   if base.Fields != nil {
     fields:
     for _, e := range base.Fields.List {
-      ftype, _, ind, err := ident(e.Type, 0)
+      ftype, err := parseIdent(e.Type)
       if err != nil {
         return err
       }
       for _, v := range e.Names {
         
-        id, baseId, _, err := ident(v, 0)
+        id, err := parseIdent(v)
         if err != nil {
           return err
         }
-        if !baseId.IsExported() {
+        if !ast.IsExported(id.Base) {
           continue // ignore unexported fields
         }
         
@@ -690,7 +688,7 @@ if f, ok := fields[%q]; ok {
     v.%s = %s
   }
 }
-`,      policy.Names.Value, repeat(ind, '*') + rev.Name, id.Name, vassign)))
+`,      policy.Names.Value, repeat(id.Indirects, '*') + rev.Name, id.Name, vassign)))
         
         if policy.Ref {
           marshal += strings.TrimSpace(fmt.Sprintf(`
