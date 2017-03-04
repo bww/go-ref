@@ -50,22 +50,15 @@ func (s typeSet) Add(t *ast.TypeSpec) {
 }
 
 /**
- * A full and base ident
- */
-type identPair struct {
-  Id, BaseId *ast.Ident
-}
-
-/**
  * Idents
  */
-type identSet map[string]identPair
+type identSet map[string]*ident
 
 /**
  * Add an ident to the set
  */
-func (s identSet) Add(id, baseId *ast.Ident) {
-  s[id.Name] = identPair{id, baseId}
+func (s identSet) Add(id *ident) {
+  s[id.Name] = id
 }
 
 /**

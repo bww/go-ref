@@ -9,31 +9,73 @@ import (
   "go/token"
 )
 
-func ident(e ast.Expr, r int) (*ast.Ident, *ast.Ident, int, error) {
+type ident struct {
+  Name      string
+  Base      string
+  Indirects int
+  Dims      int
+}
+
+func newIdent(name, base string, inds, dims int) *ident {
+  return &ident{name, base, inds, dims}
+}
+
+func parseIdent(e ast.Expr) (*ident, error) {
+  d, err := parseIdentR(e, 0, 0)
+  if err != nil {
+    return nil, err
+  }
+  var s string
+  for i := 0; i < d.Dims; i++ {
+    s += "[]"
+  }
+  for i := 0; i < d.Indirects; i++ {
+    s += "*"
+  }
+  d.Name = s
+  return d, nil
+}
+
+func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
   switch v := e.(type) {
+    
     case *ast.Ident:
-      return v, v, r, nil
+      return newIdent(v, v.Name, v.Name, r, d)
+      
     case *ast.StarExpr:
-      return ident(v.X, r + 1)
+      return parseIdentR(v.X, r + 1, d)
+      
     case *ast.SelectorExpr:
-      p, s, n, err := joinIdent(e, r + 1)
+      p, s, n, err := concatIdent(e, r + 1)
       if err != nil {
-        return nil, nil, -1, err
+        return nil, err
       }
-      return ast.NewIdent(p +"."+ s), ast.NewIdent(s), n, nil
+      c := p +"."+ s
+      return newIdent(ast.NewIdent(c), c, s, n, d), nil
+      
+    case *ast.ArrayType:
+      if v.Len != nil {
+        return nil, fmt.Errorf("Array types are not supported; only slice types.")
+      }
+      return parseIdentR(v.Elt, r + 1, d + 1)
+      
     default:
-      return nil, nil, -1, fmt.Errorf("Not an identifier: %T (%v)", e, e)
+      return nil, fmt.Errorf("Not a valid identifier: %T (%v)", e, e)
+      
   }
 }
 
-func joinIdent(e ast.Expr, r int) (string, string, int, error) {
+func concatIdent(e ast.Expr, r int) (string, string, int, error) {
   switch v := e.(type) {
+    
     case *ast.Ident:
       return "", v.Name, r, nil
+      
     case *ast.StarExpr:
-      return joinIdent(v.X, r + 1)
+      return concatIdent(v.X, r + 1)
+      
     case *ast.SelectorExpr:
-      p, s, n, err := joinIdent(v.X, r + 1)
+      p, s, n, err := concatIdent(v.X, r + 1)
       if err != nil {
         return "", "", -1, err
       }
@@ -43,8 +85,10 @@ func joinIdent(e ast.Expr, r int) (string, string, int, error) {
         p = s
       }
       return p, v.Sel.Name, n, nil
+      
     default:
       return "", "", -1, fmt.Errorf("Unsupported type: %T (%v)", e, e)
+      
   }
 }
 
