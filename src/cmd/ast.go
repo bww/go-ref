@@ -16,6 +16,10 @@ type ident struct {
   Dims      int
 }
 
+func (d ident) Nullable() bool {
+  return d.Indirects > 0 || d.Dims > 0
+}
+
 func newIdent(name, base string, inds, dims int) *ident {
   return &ident{name, base, inds, dims}
 }
@@ -36,7 +40,7 @@ func parseIdent(e ast.Expr) (*ident, error) {
   for i := 0; i < d.Indirects; i++ {
     s += "*"
   }
-  d.Name = s
+  d.Name = s + d.Name
   return d, nil
 }
 
@@ -50,7 +54,7 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       return parseIdentR(v.X, r + 1, d)
       
     case *ast.SelectorExpr:
-      p, s, n, err := concatIdent(e, r + 1)
+      p, s, n, err := concatIdent(e, r)
       if err != nil {
         return nil, err
       }
@@ -60,7 +64,7 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       if v.Len != nil {
         return nil, fmt.Errorf("Array types are not supported; only slice types.")
       }
-      return parseIdentR(v.Elt, r + 1, d + 1)
+      return parseIdentR(v.Elt, r, d + 1)
       
     default:
       return nil, fmt.Errorf("Not a valid identifier: %T (%v)", e, e)
@@ -75,10 +79,10 @@ func concatIdent(e ast.Expr, r int) (string, string, int, error) {
       return "", v.Name, r, nil
       
     case *ast.StarExpr:
-      return concatIdent(v.X, r + 1)
+      return concatIdent(v.X, r)
       
     case *ast.SelectorExpr:
-      p, s, n, err := concatIdent(v.X, r + 1)
+      p, s, n, err := concatIdent(v.X, r)
       if err != nil {
         return "", "", -1, err
       }
