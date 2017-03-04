@@ -22,6 +22,7 @@ $(PRODUCT): $(SRC)
 
 build: $(PRODUCT) ## Build the product
 
+test: export REF_TEST_DATA := $(PWD)/test
 test: ## Run tests
 	go test -test.v ./src/cmd
 
