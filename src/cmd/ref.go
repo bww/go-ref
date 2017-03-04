@@ -670,7 +670,7 @@ if err != nil {
         
         var vassign string
         if policy.Ref {
-          vassign = fmt.Sprintf(`New%v(e)`, ftype.Name)
+          vassign = fmt.Sprintf(`New%v(e)`, ftype.Base)
         }else{
           vassign = `e`
         }
@@ -705,7 +705,7 @@ else if f, ok = fields[%q]; ok {
     v.%v = New%vId(e)
   }
 }
-`,        idType, id.Name, ftype.Name)))
+`,        idType, id.Name, ftype.Base)))
         }
         
         marshal += "\n"
