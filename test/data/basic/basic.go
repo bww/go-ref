@@ -30,6 +30,16 @@ type W struct {
   B []*json.RawMessage  `json:"b" ref:"b_id,value"`
 }
 
+type Q struct {
+  A int                 `json:"a"`
+  B *X                  `json:"b"`
+}
+
+type R struct {
+  A int                 `json:"a"`
+  B *X                  `json:"b" ref:"b_id,value"`
+}
+
 func TestMarshalRoundtrip(t *testing.T) {
   var s []byte
   var err error
@@ -89,6 +99,34 @@ func TestMarshalRoundtrip(t *testing.T) {
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
     assert.Equal(t, w.A, w1.A)
     assert.Equal(t, w.B, w1.B)
+  }
+  
+  q := &Q{123, x}
+  
+  s, err = json.Marshal(q)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, `{"a":123,"b":{"a":123,"b":{"a":123}}}`, string(s))
+  }
+  
+  var q1 Q
+  err = json.Unmarshal(s, &q1)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, q.A, q1.A)
+    assert.Equal(t, q.B, q1.B)
+  }
+  
+  r := &R{123, NewXRef(x)}
+  
+  s, err = json.Marshal(r)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, `{"a":123,"b":{"a":123,"b":{"a":123}}}`, string(s))
+  }
+  
+  var r1 R
+  err = json.Unmarshal(s, &r1)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, r.A, r1.A)
+    assert.Equal(t, r.B, r1.B)
   }
   
 }
