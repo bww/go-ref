@@ -700,7 +700,7 @@ if err != nil {
         }
         
         inds := rev.Indirects
-        if !rev.Nullable() {
+        if policy.Ref && !rev.Nullable() {
           inds++
         }
         
