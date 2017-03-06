@@ -14,6 +14,7 @@ type ident struct {
   Base      string
   Indirects int
   Dims      int
+  Key       *ident
 }
 
 func (d ident) Nullable() bool {
@@ -21,11 +22,11 @@ func (d ident) Nullable() bool {
 }
 
 func newIdent(name, base string, inds, dims int) *ident {
-  return &ident{name, base, inds, dims}
+  return &ident{name, base, inds, dims, nil}
 }
 
 func astIdent(id *ast.Ident) *ident {
-  return &ident{id.Name, id.Name, 0, 0}
+  return &ident{id.Name, id.Name, 0, 0, nil}
 }
 
 func parseIdent(e ast.Expr) (*ident, error) {
@@ -34,6 +35,10 @@ func parseIdent(e ast.Expr) (*ident, error) {
     return nil, err
   }
   var s, p string
+  if d.Key != nil {
+    p += "MapOf"+ strings.Title(d.Key.Base) +"To"
+    s += "map["+ d.Key.Name +"]"
+  }
   for i := 0; i < d.Dims; i++ {
     p += "ArrayOf"
     s += "[]"
@@ -70,6 +75,18 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
         return nil, fmt.Errorf("Array types are not supported; only slice types.")
       }
       return parseIdentR(v.Elt, r, d + 1)
+      
+    case *ast.MapType:
+      key, err := parseIdent(v.Key)
+      if err != nil {
+        return nil, err
+      }
+      val, err := parseIdent(v.Value)
+      if err != nil {
+        return nil, err
+      }
+      val.Key = key
+      return val, nil
       
     default:
       return nil, fmt.Errorf("Not a valid identifier: %T (%v)", e, e)

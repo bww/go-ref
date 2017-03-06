@@ -30,6 +30,11 @@ type W struct {
   B []*json.RawMessage  `json:"b" ref:"b_id,value"`
 }
 
+type P struct {
+  A int                           `json:"a"`
+  B map[string]*json.RawMessage   `json:"b" ref:"b_id,value"`
+}
+
 type Q struct {
   A int                 `json:"a"`
   B *X                  `json:"b"`
@@ -99,6 +104,20 @@ func TestMarshalRoundtrip(t *testing.T) {
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
     assert.Equal(t, w.A, w1.A)
     assert.Equal(t, w.B, w1.B)
+  }
+  
+  p := &P{123, NewMapOfStringToRawMessageRef(map[string]json.RawMessage{"yo": json.RawMessage(`{"a":false}`)})}
+  
+  s, err = json.Marshal(p)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, `{"a":123,"b":{"yo":{"a":false}}`, string(s))
+  }
+  
+  var p1 P
+  err = json.Unmarshal(s, &p1)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, p.A, p1.A)
+    assert.Equal(t, p.B, p1.B)
   }
   
   q := &Q{123, x}
