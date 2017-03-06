@@ -415,7 +415,6 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
         t := reflect.StructTag(tag)
         if ref := t.Get(refTag); ref != "" {
           
-          // NOTE INDIRECTS HERE FOR UNDERLYING VALUE IN GENERATED TYPE?
           id, err := parseIdent(e.Type)
           if err != nil {
             return false, err
@@ -675,6 +674,11 @@ if err != nil {
           vassign = `e`
         }
         
+        inds := rev.Indirects
+        if !rev.Nullable() {
+          inds++
+        }
+        
         marshal += "\n"
         marshal += fmt.Sprintf(`  // %s`, id.Name) +"\n"
         marshal += indent(1, strings.TrimSpace(fmt.Sprintf(`
@@ -688,7 +692,7 @@ if f, ok := fields[%q]; ok {
     v.%s = %s
   }
 }
-`,      policy.Names.Value, repeat(id.Indirects, '*') + rev.Name, id.Name, vassign)))
+`,      policy.Names.Value, repeat(inds, '*') + rev.Name, id.Name, vassign)))
         
         if policy.Ref {
           marshal += strings.TrimSpace(fmt.Sprintf(`
