@@ -106,11 +106,12 @@ func TestMarshalRoundtrip(t *testing.T) {
     assert.Equal(t, w.B, w1.B)
   }
   
-  p := &P{123, NewMapOfStringToRawMessageRef(map[string]json.RawMessage{"yo": json.RawMessage(`{"a":false}`)})}
+  m1 := json.RawMessage(`{"a":false}`)
+  p := &P{123, NewMapOfStringToPtrToRawMessageRef(map[string]*json.RawMessage{"yo": &m1})}
   
   s, err = json.Marshal(p)
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
-    assert.Equal(t, `{"a":123,"b":{"yo":{"a":false}}`, string(s))
+    assert.Equal(t, `{"a":123,"b":{"yo":{"a":false}}}`, string(s))
   }
   
   var p1 P

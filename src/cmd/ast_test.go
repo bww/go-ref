@@ -38,4 +38,5 @@ func TestParseIdent(t *testing.T) {
   testIdent(t, testCase{`map[string]Example`, &ident{`map[string]Example`, `MapOfStringToExample`, 0, 0, newIdent(`string`, `string`, 0, 0)}})
   testIdent(t, testCase{`map[string]*Example`, &ident{`map[string]*Example`, `MapOfStringToPtrToExample`, 0, 0, newIdent(`string`, `string`, 0, 0)}})
   testIdent(t, testCase{`map[*string]*Example`, &ident{`map[*string]*Example`, `MapOfPtrToStringToPtrToExample`, 0, 0, newIdent(`*string`, `string`, 1, 0)}})
+  testIdent(t, testCase{`map[string]*json.RawMessage`, &ident{`map[string]*json.RawMessage`, `MapOfStringToPtrToRawMessage`, 0, 0, newIdent(`string`, `string`, 0, 0)}})
 }
