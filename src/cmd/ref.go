@@ -86,6 +86,7 @@ var (
 
 var (
   stripComments = true
+  extraImports importSet
 )
 
 /**
@@ -121,14 +122,18 @@ type context struct {
 /**
  * Create a new context
  */
-func newContext(pkg string, opts options) *context {
-  return &context{pkg, opts, make(importSet), make(importSet), make(typeSet), make(identSet), make(identSet), make(map[string]*ident)}
+func newContext(pkg string, extra importSet, opts options) *context {
+  if extra == nil {
+    extra = make(importSet)
+  }
+  return &context{pkg, opts, make(importSet), extra, make(typeSet), make(identSet), make(identSet), make(map[string]*ident)}
 }
 
 /**
  * You know what it does
  */
 func main() {
+  var imports flagList
   
   if x := strings.LastIndex(os.Args[0], "/"); x > -1 {
     CMD = os.Args[0][x+1:]
@@ -144,6 +149,7 @@ func main() {
   fForce          := cmdline.Bool     ("force",           false,      "Generate all files, including those which are not out-of-date.")
   fDebug          := cmdline.Bool     ("debug",           false,      "Enable debugging mode.")
   fVerbose        := cmdline.Bool     ("verbose",         false,      "Be more verbose.")
+  cmdline.Var      (&imports,          "import",                      "Consider the provided package for import.")
   cmdline.Parse(os.Args[1:])
   
   DEBUG           = *fDebug
@@ -153,6 +159,13 @@ func main() {
   buildTag        = *fBuildTag
   fileSuffix      = *fFileSuffix
   stripComments   = *fStripComments
+  
+  if len(imports) > 0 {
+    extraImports = make(importSet)
+    for _, e := range imports {
+      extraImports.Add(&ast.ImportSpec{Path:&ast.BasicLit{Kind:token.STRING, Value:strconv.Quote(e)}})
+    }
+  }
   
   opts := optionNone
   for _, f := range cmdline.Args() {
@@ -191,7 +204,7 @@ func procDir(dir string, opts options) error {
   }
   
   for pname, pkg := range pkgs {
-    err := procPackage(newContext(pname, opts), fset, dir, pkg)
+    err := procPackage(newContext(pname, extraImports, opts), fset, dir, pkg)
     if err != nil {
       return err
     }
@@ -787,4 +800,24 @@ func refFile(src string) string {
   base := path.Base(src)
   ext  := path.Ext(src)
   return path.Join(path.Dir(src), base[:len(base) - len(ext)] + fileSuffix + ext)
+}
+
+/**
+ * Flag string list
+ */
+type flagList []string
+
+/**
+ * Set a flag
+ */
+func (s *flagList) Set(v string) error {
+  *s = append(*s, v)
+  return nil
+}
+
+/**
+ * Describe
+ */
+func (s *flagList) String() string {
+  return fmt.Sprintf("%+v", *s)
 }

@@ -18,7 +18,7 @@ type ident struct {
 }
 
 func (d ident) Nullable() bool {
-  return d.Indirects > 0 || d.Dims > 0
+  return d.Indirects > 0 || d.Dims > 0 || d.Key != nil
 }
 
 func newIdent(name, base string, inds, dims int) *ident {
