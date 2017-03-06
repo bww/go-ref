@@ -492,7 +492,7 @@ type %v struct {
   Value %v
 }
 
-func New%v(v *%v) *%v {
+func New%v(v %v) *%v {
   return &%v{Value:v}
 }
 
@@ -504,7 +504,7 @@ func (v %v) HasValue() bool {
   return v.Value != nil
 }`,
   refId, idType, repeat(inds, '*') + id.Name,
-  refId, id.Name, refId,
+  refId, repeat(inds, '*') + id.Name, refId,
   refId,
   refId, idType, refId,
   refId,
