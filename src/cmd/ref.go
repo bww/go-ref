@@ -84,6 +84,10 @@ var (
   pkgSrc        = "pkg"
 )
 
+var (
+  stripComments = true
+)
+
 /**
  * Options
  */
@@ -132,21 +136,23 @@ func main() {
     CMD = os.Args[0]
   }
   
-  cmdline     := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-  fIdent      := cmdline.String   ("ident",       "string",   "The type to use for generated identifiers.")
-  fBuildTag   := cmdline.String   ("build-tag",   "",         "Specify a Go build tag to be emitted in generated files.")
-  fFileSuffix := cmdline.String   ("file-suffix", "_ref",     "Specify the suffix to append to generated filenames.")
-  fForce      := cmdline.Bool     ("force",       false,      "Generate all files, including those which are not out-of-date.")
-  fDebug      := cmdline.Bool     ("debug",       false,      "Enable debugging mode.")
-  fVerbose    := cmdline.Bool     ("verbose",     false,      "Be more verbose.")
+  cmdline         := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+  fIdent          := cmdline.String   ("ident",           "string",   "The type to use for generated identifiers.")
+  fBuildTag       := cmdline.String   ("build-tag",       "",         "Specify a Go build tag to be emitted in generated files.")
+  fFileSuffix     := cmdline.String   ("file-suffix",     "_ref",     "Specify the suffix to append to generated filenames.")
+  fStripComments  := cmdline.Bool     ("strip-comments",  true,       "Strip out build tags (and anything else in leading/doc comments).")
+  fForce          := cmdline.Bool     ("force",           false,      "Generate all files, including those which are not out-of-date.")
+  fDebug          := cmdline.Bool     ("debug",           false,      "Enable debugging mode.")
+  fVerbose        := cmdline.Bool     ("verbose",         false,      "Be more verbose.")
   cmdline.Parse(os.Args[1:])
   
-  DEBUG       = *fDebug
-  VERBOSE     = *fVerbose
-  FORCE       = *fForce
-  idType      = *fIdent
-  buildTag    = *fBuildTag
-  fileSuffix  = *fFileSuffix
+  DEBUG           = *fDebug
+  VERBOSE         = *fVerbose
+  FORCE           = *fForce
+  idType          = *fIdent
+  buildTag        = *fBuildTag
+  fileSuffix      = *fFileSuffix
+  stripComments   = *fStripComments
   
   opts := optionNone
   for _, f := range cmdline.Args() {
@@ -379,6 +385,11 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
 // > %v
 // Changes will be overwritten.
     `) +"\n", src)
+    
+    // strip comments if necessary
+    if stripComments {
+      file.Comments = nil
+    }
     
     printSource(w, fset, file)
   }

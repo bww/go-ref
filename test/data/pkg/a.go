@@ -4,7 +4,10 @@ package main
 
 import (
   "fmt"
+  "testing"
+  "go/parser"
   "encoding/json"
+  "github.com/stretchr/testify/assert"
 )
 
 type SimpleHello struct {
@@ -15,6 +18,6 @@ type SimpleHello struct {
 //   A []*json.RawMessage  `json:"as" ref:"a_ids,id"`
 // }
 
-func main() {
-  fmt.Println("Ok")
+func TestPkg(t *testing.T) {
+  fmt.Println("OKOK")
 }
