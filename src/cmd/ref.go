@@ -719,7 +719,7 @@ if err != nil {
         
         var inds int
         if id.Dims < 1 {
-          inds = id.Indirects
+          inds = id.Inds
         }
         if policy.Ref && !rev.Nullable() {
           inds++

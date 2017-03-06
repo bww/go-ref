@@ -10,15 +10,15 @@ import (
 )
 
 type ident struct {
-  Name      string
-  Base      string
-  Indirects int
-  Dims      int
-  Key       *ident
+  Name  string
+  Base  string
+  Inds  int
+  Dims  int
+  Key   *ident
 }
 
 func (d ident) Nullable() bool {
-  return d.Indirects > 0 || d.Dims > 0 || d.Key != nil
+  return d.Inds > 0 || d.Dims > 0 || d.Key != nil
 }
 
 func newIdent(name, base string, inds, dims int) *ident {
@@ -43,7 +43,7 @@ func parseIdent(e ast.Expr) (*ident, error) {
     p += "ArrayOf"
     s += "[]"
   }
-  for i := 0; i < d.Indirects; i++ {
+  for i := 0; i < d.Inds; i++ {
     s += "*"
     if d.Dims > 0 {
       p += "PtrTo"
@@ -85,7 +85,8 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       if err != nil {
         return nil, err
       }
-      val.Key = key
+      val.Inds = 0
+      val.Key  = key
       return val, nil
       
     default:
