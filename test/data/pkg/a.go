@@ -14,3 +14,7 @@ type SimpleHello struct {
 // type SimpleExample struct {
 //   A []*json.RawMessage  `json:"as" ref:"a_ids,id"`
 // }
+
+func main() {
+  fmt.Println("Ok")
+}
