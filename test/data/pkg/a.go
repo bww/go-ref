@@ -25,11 +25,12 @@ type Z struct {
   B []json.RawMessage   `json:"b" ref:"b_id,value"`
 }
 
-// type SimpleExample struct {
-//   A []*json.RawMessage  `json:"as" ref:"a_ids,id"`
-// }
+type W struct {
+  A int                 `json:"a"`
+  B []*json.RawMessage  `json:"b" ref:"b_id,value"`
+}
 
-func TestPkg(t *testing.T) {
+func TestMarshal(t *testing.T) {
   var s []byte
   var err error
   
@@ -49,6 +50,13 @@ func TestPkg(t *testing.T) {
   }
   
   z := &Z{123, NewArrayOfRawMessageRef([]json.RawMessage{m, m})}
+  
+  s, err = json.Marshal(z)
+  if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
+    assert.Equal(t, `{"a":123,"b":[{"a":123},{"a":123}]}`, string(s))
+  }
+  
+  w := &Z{123, NewArrayOfRawMessageRef([]json.RawMessage{m, m})}
   
   s, err = json.Marshal(z)
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {

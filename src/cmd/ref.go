@@ -480,7 +480,10 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
 
 func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ident) error {
   
-  inds := id.Indirects
+  var inds int
+  if id.Dims < 1 {
+    inds = id.Indirects
+  }
   if !id.Nullable() {
     inds++
   }
@@ -704,7 +707,10 @@ if err != nil {
           vassign = `e`
         }
         
-        inds := rev.Indirects
+        var inds int
+        if id.Dims < 1 {
+          inds = id.Indirects
+        }
         if policy.Ref && !rev.Nullable() {
           inds++
         }

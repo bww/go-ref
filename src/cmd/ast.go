@@ -40,6 +40,9 @@ func parseIdent(e ast.Expr) (*ident, error) {
   }
   for i := 0; i < d.Indirects; i++ {
     s += "*"
+    if d.Dims > 0 {
+      p += "PtrTo"
+    }
   }
   d.Name = s + d.Name
   d.Base = p + d.Base
