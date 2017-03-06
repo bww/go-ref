@@ -58,10 +58,9 @@ func TestMarshal(t *testing.T) {
   
   w := &Z{123, NewArrayOfRawMessageRef([]json.RawMessage{m, m})}
   
-  s, err = json.Marshal(z)
+  s, err = json.Marshal(w)
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
     assert.Equal(t, `{"a":123,"b":[{"a":123},{"a":123}]}`, string(s))
   }
   
-  fmt.Println("OKOK")
 }
