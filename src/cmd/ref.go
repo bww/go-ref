@@ -480,11 +480,16 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
 
 func genType(cxt *context, w io.Writer, fset *token.FileSet, id *ident) error {
   
+  inds := id.Indirects
+  if !id.Nullable() {
+    inds++
+  }
+  
   refId := id.Base + refSuffix
   tspec := fmt.Sprintf(`
 type %v struct {
   Id    %v
-  Value *%v
+  Value %v
 }
 
 func New%v(v *%v) *%v {
@@ -498,7 +503,7 @@ func New%vId(v %v) *%v {
 func (v %v) HasValue() bool {
   return v.Value != nil
 }`,
-  refId, idType, id.Name,
+  refId, idType, repeat(inds, '*') + id.Name,
   refId, id.Name, refId,
   refId,
   refId, idType, refId,

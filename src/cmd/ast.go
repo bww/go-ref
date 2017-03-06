@@ -33,14 +33,16 @@ func parseIdent(e ast.Expr) (*ident, error) {
   if err != nil {
     return nil, err
   }
-  var s string
+  var s, p string
   for i := 0; i < d.Dims; i++ {
+    p += "ArrayOf"
     s += "[]"
   }
   for i := 0; i < d.Indirects; i++ {
     s += "*"
   }
   d.Name = s + d.Name
+  d.Base = p + d.Base
   return d, nil
 }
 
