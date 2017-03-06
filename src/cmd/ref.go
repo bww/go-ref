@@ -349,14 +349,19 @@ func procAST(cxt *context, fset *token.FileSet, pkg, src, dst string, file *ast.
     // traverse the source a second time to compile a set of package references
     ast.Inspect(file, func(n ast.Node) bool {
       switch t := n.(type) {
-        case *ast.SelectorExpr:
-          e := leftmost(t)
-          if id, ok := e.(*ast.Ident); ok {
-            n := pkgrefs[id.Name]
-            n++
-            pkgrefs[id.Name] = n
-          }
+        case *ast.Ident:
+          c := pkgrefs[t.Name]
+          c++
+          pkgrefs[t.Name] = c
           return false
+        // case *ast.SelectorExpr:
+        //   e := leftmost(t)
+        //   if id, ok := e.(*ast.Ident); ok {
+        //     n := pkgrefs[id.Name]
+        //     n++
+        //     pkgrefs[id.Name] = n
+        //   }
+        //   return false
       }
       return true
     })

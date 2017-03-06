@@ -4,11 +4,17 @@ package main
 
 import (
   "fmt"
+  "time"
   "testing"
   "go/parser"
   "encoding/json"
   "github.com/stretchr/testify/assert"
 )
+
+type A struct {
+  A int                 `json:"a"`
+  B time.Time           `json:"b"`
+}
 
 type X struct {
   A int                 `json:"a"`
@@ -33,6 +39,7 @@ type W struct {
 type P struct {
   A int                           `json:"a"`
   B map[string]*json.RawMessage   `json:"b" ref:"b_id,value"`
+  C time.Time                     `json:"c"`
 }
 
 type Q struct {
