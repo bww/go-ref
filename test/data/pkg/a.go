@@ -48,7 +48,7 @@ func TestPkg(t *testing.T) {
     assert.Equal(t, `{"a":123}`, string(s))
   }
   
-  z := &Y{123, NewRawMessageRef([]json.RawMessage{m, m})}
+  z := &Z{123, NewArrayOfRawMessageRef([]json.RawMessage{m, m})}
   
   s, err = json.Marshal(z)
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
