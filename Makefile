@@ -13,6 +13,10 @@ PRODUCT	:= $(TARGETS)/$(NAME)
 # sources
 SRC = $(shell find src -name \*.go -print)
 
+# tests
+TEST_PACKAGES := ./src/cmd
+TEST_FIXTURES := basic
+
 .PHONY: all build test clean
 
 all: build
@@ -24,7 +28,8 @@ build: $(PRODUCT) ## Build the product
 
 test: export REF_TEST_DATA := $(PWD)/test
 test: ## Run tests
-	go test -test.v ./src/cmd
+	go test -test.v $(TEST_PACKAGES)
+	$(PWD)/test/bin/run.sh $(addprefix $(PWD)/test/data/, $(TEST_FIXTURES))
 
 clean: ## Delete the built product and any generated files
 	rm -rf $(TARGETS)

@@ -31,8 +31,8 @@ func TestParseIdent(t *testing.T) {
   testIdent(t, testCase{`example`, newIdent(`example`, `example`, 0, 0)})
   testIdent(t, testCase{`foo.bar.Car`, newIdent(`foo.bar.Car`, `Car`, 0, 0)})
   testIdent(t, testCase{`*Example`, newIdent(`*Example`, `Example`, 1, 0)})
-  testIdent(t, testCase{`[]Example`, newIdent(`[]Example`, `Example`, 0, 1)})
-  testIdent(t, testCase{`[]*json.RawMessage`, newIdent(`[]*json.RawMessage`, `RawMessage`, 1, 1)})
-  testIdent(t, testCase{`[][]*json.RawMessage`, newIdent(`[][]*json.RawMessage`, `RawMessage`, 1, 2)})
-  testIdent(t, testCase{`[][]**json.RawMessage`, newIdent(`[][]**json.RawMessage`, `RawMessage`, 2, 2)})
+  testIdent(t, testCase{`[]Example`, newIdent(`[]Example`, `ArrayOfExample`, 0, 1)})
+  testIdent(t, testCase{`[]*json.RawMessage`, newIdent(`[]*json.RawMessage`, `ArrayOfPtrToRawMessage`, 1, 1)})
+  testIdent(t, testCase{`[][]*json.RawMessage`, newIdent(`[][]*json.RawMessage`, `ArrayOfArrayOfPtrToRawMessage`, 1, 2)})
+  testIdent(t, testCase{`[][]**json.RawMessage`, newIdent(`[][]**json.RawMessage`, `ArrayOfArrayOfPtrToPtrToRawMessage`, 2, 2)})
 }
