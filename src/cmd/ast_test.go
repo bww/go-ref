@@ -20,7 +20,7 @@ func testIdent(t *testing.T, c testCase) {
       fmt.Println(">>>", id.Base, id.Name)
       assert.Equal(t, c.Expect.Name, id.Name)
       assert.Equal(t, c.Expect.Base, id.Base)
-      assert.Equal(t, c.Expect.Indirects, id.Indirects)
+      assert.Equal(t, c.Expect.Inds, id.Inds)
       assert.Equal(t, c.Expect.Dims, id.Dims)
     }
   }
@@ -35,4 +35,7 @@ func TestParseIdent(t *testing.T) {
   testIdent(t, testCase{`[]*json.RawMessage`, newIdent(`[]*json.RawMessage`, `ArrayOfPtrToRawMessage`, 1, 1)})
   testIdent(t, testCase{`[][]*json.RawMessage`, newIdent(`[][]*json.RawMessage`, `ArrayOfArrayOfPtrToRawMessage`, 1, 2)})
   testIdent(t, testCase{`[][]**json.RawMessage`, newIdent(`[][]**json.RawMessage`, `ArrayOfArrayOfPtrToPtrToRawMessage`, 2, 2)})
+  testIdent(t, testCase{`map[string]Example`, &ident{`map[string]Example`, `MapOfStringToExample`, 0, 0, newIdent(`string`, `string`, 0, 0)}})
+  testIdent(t, testCase{`map[string]*Example`, &ident{`map[string]*Example`, `MapOfStringToPtrToExample`, 0, 0, newIdent(`string`, `string`, 0, 0)}})
+  testIdent(t, testCase{`map[*string]*Example`, &ident{`map[*string]*Example`, `MapOfPtrToStringToPtrToExample`, 0, 0, newIdent(`*string`, `string`, 1, 0)}})
 }

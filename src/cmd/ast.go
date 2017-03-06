@@ -30,6 +30,10 @@ func astIdent(id *ast.Ident) *ident {
 }
 
 func parseIdent(e ast.Expr) (*ident, error) {
+  return parseIdentE(e, false)
+}
+
+func parseIdentE(e ast.Expr, r bool) (*ident, error) {
   d, err := parseIdentR(e, 0, 0)
   if err != nil {
     return nil, err
@@ -45,12 +49,16 @@ func parseIdent(e ast.Expr) (*ident, error) {
   }
   for i := 0; i < d.Inds; i++ {
     s += "*"
-    if d.Dims > 0 {
+    if r || d.Dims > 0 {
       p += "PtrTo"
     }
   }
   d.Name = s + d.Name
-  d.Base = p + d.Base
+  base := d.Base
+  if d.Key != nil || d.Dims > 0 || d.Inds > 0 {
+    base = strings.Title(base)
+  }
+  d.Base = p + base
   return d, nil
 }
 
@@ -77,11 +85,11 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       return parseIdentR(v.Elt, r, d + 1)
       
     case *ast.MapType:
-      key, err := parseIdent(v.Key)
+      key, err := parseIdentE(v.Key, true)
       if err != nil {
         return nil, err
       }
-      val, err := parseIdent(v.Value)
+      val, err := parseIdentE(v.Value, true)
       if err != nil {
         return nil, err
       }
