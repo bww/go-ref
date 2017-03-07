@@ -16,6 +16,7 @@ import (
 
 var (
   DEBUG bool
+  TRACE bool
   VERBOSE bool
   FORCE bool
   CMD string
@@ -148,11 +149,13 @@ func main() {
   fStripComments  := cmdline.Bool     ("strip-comments",  true,       "Strip out build tags (and anything else in leading/doc comments).")
   fForce          := cmdline.Bool     ("force",           false,      "Generate all files, including those which are not out-of-date.")
   fDebug          := cmdline.Bool     ("debug",           false,      "Enable debugging mode.")
+  fTrace          := cmdline.Bool     ("trace",           false,      "Trace out (un)marshaled data.")
   fVerbose        := cmdline.Bool     ("verbose",         false,      "Be more verbose.")
   cmdline.Var      (&imports,          "import",                      "Consider the provided package for import.")
   cmdline.Parse(os.Args[1:])
   
   DEBUG           = *fDebug
+  TRACE           = *fTrace
   VERBOSE         = *fVerbose
   FORCE           = *fForce
   idType          = *fIdent
@@ -661,7 +664,7 @@ s += string(x)
   }
   
   marshal += `  s += "}"` + "\n"
-  if VERBOSE {
+  if TRACE {
     marshal += fmt.Sprintf(`  ref_fmt.Println(">>>", %q, s)`, id.Name) + "\n"
   }
   marshal += `  return []byte(s), nil
@@ -788,7 +791,7 @@ else if f, ok = fields[%q]; ok {
     }
   }
   
-  if VERBOSE {
+  if TRACE {
     marshal += "\n"
     marshal += fmt.Sprintf(`  ref_fmt.Printf("<<< %s %%+v\n", fields)`, id.Name)
   }

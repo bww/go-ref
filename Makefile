@@ -27,7 +27,7 @@ $(PRODUCT): $(SRC)
 build: $(PRODUCT) ## Build the product
 
 test: export REF_TEST_DATA := $(PWD)/test
-test: ## Run tests
+test: build ## Run tests
 	go test -test.v $(TEST_PACKAGES)
 	$(PWD)/test/bin/run.sh $(addprefix $(PWD)/test/data/, $(TEST_FIXTURES))
 
