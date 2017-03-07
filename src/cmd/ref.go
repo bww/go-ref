@@ -453,7 +453,14 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
   if s.Fields != nil {
     for i, e := range s.Fields.List {
       
-      if c, ok := e.Type.(*ast.SelectorExpr); ok {
+      var x ast.Expr
+      if c, ok := e.Type.(*ast.StarExpr); ok {
+        x = deref(c, 0)
+      }else{
+        x = e.Type
+      }
+      
+      if c, ok := x.(*ast.SelectorExpr); ok {
         v := leftmost(c)
         if p, ok := v.(*ast.Ident); ok {
           m, ok := cxt.Imports[p.Name]

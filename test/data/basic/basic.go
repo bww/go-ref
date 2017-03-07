@@ -39,6 +39,7 @@ type W struct {
 type P struct {
   A int                           `json:"a"`
   B map[string]*json.RawMessage   `json:"b" ref:"b_id,value"`
+  C *time.Time                    `json:"c"`
 }
 
 type Q struct {

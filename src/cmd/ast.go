@@ -144,6 +144,18 @@ func indirect(e *ast.Ident, r int) ast.Expr {
   return v
 }
 
+func deref(e *ast.StarExpr, m int) ast.Expr {
+  v := ast.Expr(e)
+  for i := 0; v != nil && (m < 1 || i < m); i++ {
+    if e, ok := v.(*ast.StarExpr); ok {
+      v = e.X
+    }else{
+      break
+    }
+  }
+  return v
+}
+
 func importPackage(e *ast.ImportSpec) string {
   if id := e.Name; id != nil {
     return id.Name
