@@ -696,12 +696,13 @@ func genUnmarshal(cxt *context, w io.Writer, fset *token.FileSet, id *ident) err
   
   marshal := indent(1, strings.TrimSpace(fmt.Sprintf(`
 fields := make(map[string]ref_json.RawMessage)
+var x %s
 
 err := ref_json.Unmarshal(data, &fields)
 if err != nil {
   return err
 }
-`,))) +"\n"
+`, id.Name))) +"\n"
   
   if base.Fields != nil {
     fields:
@@ -758,7 +759,7 @@ if f, ok := fields[%q]; ok {
     return err
   }
   if !isEmptyValue(ref_reflect.ValueOf(e)) {
-    v.%s = %s
+    x.%s = %s
   }
 }
 `,      policy.Names.Value, repeat(inds, '*') + rev.Name, id.Name, vassign)))
@@ -775,7 +776,7 @@ else if f, ok = fields[%q]; ok {
     return err
   }
   if !isEmptyValue(ref_reflect.ValueOf(e)) {
-    v.%v = New%vId(e)
+    x.%v = New%vId(e)
   }
 }
 `,        idType, id.Name, ftype.Base)))
@@ -792,6 +793,7 @@ else if f, ok = fields[%q]; ok {
     marshal += fmt.Sprintf(`  ref_fmt.Printf("<<< %s %%+v\n", fields)`, id.Name)
   }
   marshal += "\n"
+  marshal += "  *v = x\n"
   marshal += "  return nil\n"
   marshal += `}`
   
