@@ -93,9 +93,7 @@ func parseIdentR(e ast.Expr, r, d int) (*ident, error) {
       if err != nil {
         return nil, err
       }
-      val.Inds = 0
-      val.Key  = key
-      return val, nil
+      return &ident{val.Name, val.Base, 0, 0, key}, nil
       
     default:
       return nil, fmt.Errorf("Not a valid identifier: %T (%v)", e, e)
