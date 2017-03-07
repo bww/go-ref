@@ -39,7 +39,7 @@ type W struct {
 type P struct {
   A int                           `json:"a"`
   B map[string]*json.RawMessage   `json:"b" ref:"b_id,value"`
-  C *time.Time                    `json:"c"`
+  C *time.Time                    `json:"c,omitempty"`
 }
 
 type Q struct {
@@ -114,7 +114,7 @@ func TestMarshalRoundtrip(t *testing.T) {
   }
   
   m1 := json.RawMessage(`{"a":false}`)
-  p := &P{123, NewMapOfStringToPtrToRawMessageRef(map[string]*json.RawMessage{"yo": &m1})}
+  p := &P{123, NewMapOfStringToPtrToRawMessageRef(map[string]*json.RawMessage{"yo": &m1}), nil}
   
   s, err = json.Marshal(p)
   if assert.Nil(t, err, fmt.Sprintf("%v", err)) {
