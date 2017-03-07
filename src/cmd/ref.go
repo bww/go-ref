@@ -447,9 +447,23 @@ func typeExpr(cxt *context, src *source, fset *token.FileSet, e ast.Expr) (bool,
 }
 
 func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructType) (bool, error) {
+  deps := make(importSet)
   var gen bool
+  
   if s.Fields != nil {
     for i, e := range s.Fields.List {
+      
+      if c, ok := e.Type.(*ast.SelectorExpr); ok {
+        v := leftmost(c)
+        if p, ok := v.(*ast.Ident); ok {
+          m, ok := cxt.Imports[p.Name]
+          if !ok {
+            return false, fmt.Errorf("Referenced package has no corresponding import: %v", p)
+          }
+          deps.Add(m)
+        }
+      }
+      
       if e.Tag != nil  && e.Tag.Kind == token.STRING {
         tag, err := strconv.Unquote(e.Tag.Value)
         if err != nil {
@@ -466,17 +480,6 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
             return false, fmt.Errorf("Field must be exported: %v", id.Base)
           }
           
-          if c, ok := e.Type.(*ast.SelectorExpr); ok {
-            v := leftmost(c)
-            if p, ok := v.(*ast.Ident); ok {
-              m, ok := cxt.Imports[p.Name]
-              if !ok {
-                return false, fmt.Errorf("Referenced package has no corresponding import: %v", p)
-              }
-              cxt.Deps.Add(m)
-            }
-          }
-          
           genId := ast.NewIdent(id.Base + refSuffix)
           s.Fields.List[i] = &ast.Field{
             Names:e.Names,
@@ -491,8 +494,16 @@ func structType(cxt *context, src *source, fset *token.FileSet, s *ast.StructTyp
           gen = true
         }
       }
+      
     }
   }
+  
+  if gen {
+    for _, v := range deps {
+      cxt.Deps.Add(v)
+    }
+  }
+  
   return gen, nil
 }
 
